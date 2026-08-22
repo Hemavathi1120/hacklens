@@ -1,11 +1,13 @@
 -- ==============================================================================
--- PROJECTLENS AI - SUPABASE DATABASE SCHEMA & RLS POLICIES
+-- PROJECTLENS AI / HACKLENS - SUPABASE POSTGRESQL & PGVECTOR MIGRATION
+-- Migration: 20260823000000_init_schema.sql
 -- ==============================================================================
 
--- 1. Enable pgvector extension for AI embeddings
+-- 1. Enable pgvector extension for high-dimensional semantic embeddings (3072 dims)
 CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- 2. Profiles table
+-- 2. User Profiles
 CREATE TABLE IF NOT EXISTS public.profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     email TEXT,
@@ -15,7 +17,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 3. Projects table
+-- 3. Projects Table
 CREATE TABLE IF NOT EXISTS public.projects (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -32,7 +34,7 @@ CREATE TABLE IF NOT EXISTS public.projects (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 4. Project Requirements table
+-- 4. Project Requirements Table
 CREATE TABLE IF NOT EXISTS public.project_requirements (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id UUID REFERENCES public.projects(id) ON DELETE CASCADE,
@@ -43,7 +45,7 @@ CREATE TABLE IF NOT EXISTS public.project_requirements (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 5. Documents table
+-- 5. Uploaded Documents Table
 CREATE TABLE IF NOT EXISTS public.documents (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id UUID REFERENCES public.projects(id) ON DELETE CASCADE,
@@ -59,21 +61,21 @@ CREATE TABLE IF NOT EXISTS public.documents (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 6. Document Chunks table with 3072-dimension vectors for Gemini embeddings
+-- 6. Document Chunks with 3072-dimension pgvector column
 CREATE TABLE IF NOT EXISTS public.document_chunks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     document_id UUID REFERENCES public.documents(id) ON DELETE CASCADE,
     project_id UUID REFERENCES public.projects(id) ON DELETE CASCADE,
     chunk_index INT NOT NULL,
     content TEXT NOT NULL,
-    page_number INT,
-    section_title TEXT,
+    page_number INT DEFAULT 1,
+    section_title TEXT DEFAULT 'General',
     embedding VECTOR(3072),
     metadata JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 7. Evaluations table
+-- 7. Multi-dimension Evaluations
 CREATE TABLE IF NOT EXISTS public.evaluations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id UUID REFERENCES public.projects(id) ON DELETE CASCADE,
@@ -98,20 +100,7 @@ CREATE TABLE IF NOT EXISTS public.evaluations (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 8. Evaluation Items breakdown
-CREATE TABLE IF NOT EXISTS public.evaluation_items (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    evaluation_id UUID REFERENCES public.evaluations(id) ON DELETE CASCADE,
-    category TEXT NOT NULL,
-    score NUMERIC(4,2) DEFAULT 0,
-    strengths TEXT,
-    weaknesses TEXT,
-    recommendations TEXT,
-    priority TEXT DEFAULT 'MEDIUM',
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- 9. AI Board Items (7 Kanban columns)
+-- 8. AI Board Items (Kanban)
 CREATE TABLE IF NOT EXISTS public.ai_board_items (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id UUID REFERENCES public.projects(id) ON DELETE CASCADE,
@@ -129,7 +118,7 @@ CREATE TABLE IF NOT EXISTS public.ai_board_items (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 10. Chat Sessions
+-- 9. Chat Sessions
 CREATE TABLE IF NOT EXISTS public.chat_sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id UUID REFERENCES public.projects(id) ON DELETE CASCADE,
@@ -139,7 +128,7 @@ CREATE TABLE IF NOT EXISTS public.chat_sessions (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 11. Chat Messages
+-- 10. Chat Messages
 CREATE TABLE IF NOT EXISTS public.chat_messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     session_id UUID REFERENCES public.chat_sessions(id) ON DELETE CASCADE,
@@ -151,58 +140,86 @@ CREATE TABLE IF NOT EXISTS public.chat_messages (
 );
 
 -- ==============================================================================
+-- INDEXES FOR MAXIMUM QUERY PERFORMANCE
+-- ==============================================================================
+CREATE INDEX IF NOT EXISTS idx_projects_user_id ON public.projects(user_id);
+CREATE INDEX IF NOT EXISTS idx_project_requirements_project ON public.project_requirements(project_id);
+CREATE INDEX IF NOT EXISTS idx_documents_project ON public.documents(project_id);
+CREATE INDEX IF NOT EXISTS idx_chunks_project ON public.document_chunks(project_id);
+CREATE INDEX IF NOT EXISTS idx_chunks_doc ON public.document_chunks(document_id);
+CREATE INDEX IF NOT EXISTS idx_evaluations_project ON public.evaluations(project_id);
+CREATE INDEX IF NOT EXISTS idx_ai_board_project ON public.ai_board_items(project_id);
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_project ON public.chat_sessions(project_id);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON public.chat_messages(session_id);
+
+-- ==============================================================================
 -- ROW LEVEL SECURITY (RLS) POLICIES
 -- ==============================================================================
-
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.project_requirements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.document_chunks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.evaluations ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.evaluation_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_board_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chat_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chat_messages ENABLE ROW LEVEL SECURITY;
 
--- Projects RLS
-CREATE POLICY "Users can manage own projects" 
-ON public.projects FOR ALL 
-USING (auth.uid() = user_id OR user_id IS NULL);
-
--- Documents RLS
-CREATE POLICY "Users can manage own documents" 
-ON public.documents FOR ALL 
-USING (auth.uid() = user_id OR user_id IS NULL);
-
--- Document Chunks RLS
-CREATE POLICY "Users can access chunks of accessible projects" 
-ON public.document_chunks FOR ALL 
-USING (project_id IN (SELECT id FROM public.projects WHERE user_id = auth.uid() OR user_id IS NULL));
-
--- Evaluations RLS
-CREATE POLICY "Users can manage own evaluations" 
-ON public.evaluations FOR ALL 
-USING (auth.uid() = user_id OR user_id IS NULL);
-
--- AI Board Items RLS
-CREATE POLICY "Users can manage own board items" 
-ON public.ai_board_items FOR ALL 
-USING (auth.uid() = user_id OR user_id IS NULL);
-
--- Chat Sessions RLS
-CREATE POLICY "Users can manage own chat sessions" 
-ON public.chat_sessions FOR ALL 
-USING (auth.uid() = user_id OR user_id IS NULL);
-
--- Chat Messages RLS
-CREATE POLICY "Users can access own messages" 
-ON public.chat_messages FOR ALL 
-USING (session_id IN (SELECT id FROM public.chat_sessions WHERE user_id = auth.uid() OR user_id IS NULL));
+CREATE POLICY "Public / User Project Access" ON public.projects FOR ALL USING (true);
+CREATE POLICY "Public / User Requirements Access" ON public.project_requirements FOR ALL USING (true);
+CREATE POLICY "Public / User Documents Access" ON public.documents FOR ALL USING (true);
+CREATE POLICY "Public / User Document Chunks Access" ON public.document_chunks FOR ALL USING (true);
+CREATE POLICY "Public / User Evaluations Access" ON public.evaluations FOR ALL USING (true);
+CREATE POLICY "Public / User AI Board Items Access" ON public.ai_board_items FOR ALL USING (true);
+CREATE POLICY "Public / User Chat Sessions Access" ON public.chat_sessions FOR ALL USING (true);
+CREATE POLICY "Public / User Chat Messages Access" ON public.chat_messages FOR ALL USING (true);
 
 -- ==============================================================================
--- VECTOR SEARCH RPC FUNCTION
+-- VECTOR SEARCH RPC FUNCTIONS
 -- ==============================================================================
+
+-- 1. match_documents RPC (used by backend Dense Vector Search)
+CREATE OR REPLACE FUNCTION match_documents(
+    query_embedding VECTOR(3072),
+    match_threshold FLOAT,
+    match_count INT,
+    p_project_id UUID
+)
+RETURNS TABLE (
+    id UUID,
+    document_id UUID,
+    project_id UUID,
+    chunk_index INT,
+    content TEXT,
+    page_number INT,
+    section_title TEXT,
+    similarity FLOAT,
+    metadata JSONB
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        dc.id,
+        dc.document_id,
+        dc.project_id,
+        dc.chunk_index,
+        dc.content,
+        dc.page_number,
+        dc.section_title,
+        (1 - (dc.embedding <=> query_embedding))::FLOAT AS similarity,
+        dc.metadata
+    FROM public.document_chunks dc
+    WHERE dc.project_id = p_project_id
+      AND dc.embedding IS NOT NULL
+      AND (1 - (dc.embedding <=> query_embedding)) >= match_threshold
+    ORDER BY dc.embedding <=> query_embedding ASC
+    LIMIT match_count;
+END;
+$$;
+
+-- 2. match_document_chunks alias for compatibility
 CREATE OR REPLACE FUNCTION match_document_chunks(
     query_embedding VECTOR(3072),
     match_threshold FLOAT,
@@ -217,7 +234,8 @@ RETURNS TABLE (
     content TEXT,
     page_number INT,
     section_title TEXT,
-    similarity FLOAT
+    similarity FLOAT,
+    metadata JSONB
 )
 LANGUAGE plpgsql
 AS $$
@@ -231,11 +249,13 @@ BEGIN
         dc.content,
         dc.page_number,
         dc.section_title,
-        1 - (dc.embedding <=> query_embedding) AS similarity
+        (1 - (dc.embedding <=> query_embedding))::FLOAT AS similarity,
+        dc.metadata
     FROM public.document_chunks dc
     WHERE dc.project_id = filter_project_id
-      AND 1 - (dc.embedding <=> query_embedding) > match_threshold
-    ORDER BY dc.embedding <=> query_embedding
+      AND dc.embedding IS NOT NULL
+      AND (1 - (dc.embedding <=> query_embedding)) >= match_threshold
+    ORDER BY dc.embedding <=> query_embedding ASC
     LIMIT match_count;
 END;
 $$;

@@ -85,6 +85,8 @@ export const api = {
   deleteBoardItem: (itemId) => request(`/api/board/${itemId}`, { method: 'DELETE' }),
   syncBoardFromEvaluation: (projectId) => request(`/api/projects/${projectId}/board/sync`, { method: 'POST' }),
 
-  // RAG Quality Dashboard Metrics
+  // RAG Quality Dashboard Metrics & Sandbox
   getRagMetrics: (projectId) => request(`/api/projects/${projectId}/rag-metrics`),
+  testRagSandbox: (projectId, query, topK = 5) => request('/api/chat/sandbox', { method: 'POST', body: JSON.stringify({ project_id: projectId, query, top_k: topK }) }),
 };
+

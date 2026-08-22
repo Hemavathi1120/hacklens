@@ -5,10 +5,27 @@ from backend.config import settings
 from backend.routers import projects, documents, chat, evaluation, ai_board, rag_metrics
 from backend.services.supabase_service import supabase_service
 
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    print("ProjectLens AI Backend starting up...")
+    try:
+        # Check if demo project exists, if not, auto-seed it
+        existing = supabase_service.get_projects()
+        if not existing:
+            print("Auto-seeding CivicLens AI demo project...")
+            projects.seed_demo_project()
+            print("Demo project seeded successfully.")
+    except Exception as e:
+        print(f"Startup initialization note: {e}")
+    yield
+
 app = FastAPI(
     title="ProjectLens AI API",
     description="Backend API for AI Project Evaluation and RAG Assistant",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # Enable permissive CORS for frontend Vite development & production
@@ -28,18 +45,6 @@ app.include_router(evaluation.router)
 app.include_router(ai_board.router)
 app.include_router(rag_metrics.router)
 
-@app.on_event("startup")
-def on_startup():
-    print("ProjectLens AI Backend starting up...")
-    try:
-        # Check if demo project exists, if not, auto-seed it
-        existing = supabase_service.get_projects()
-        if not existing:
-            print("Auto-seeding CivicLens AI demo project...")
-            projects.seed_demo_project()
-            print("Demo project seeded successfully.")
-    except Exception as e:
-        print(f"Startup initialization note: {e}")
 
 @app.get("/")
 def root():
@@ -55,8 +60,8 @@ def health_check():
     return {
         "status": "healthy",
         "supabase_url": settings.SUPABASE_URL,
-        "gemini_model": "gemini-3.6-flash",
-        "embedding_model": "models/gemini-embedding-001"
+        "gemini_model": "gemini-2.5-flash",
+        "embedding_model": "text-embedding-004"
     }
 
 if __name__ == "__main__":

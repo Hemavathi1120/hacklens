@@ -4,6 +4,8 @@ from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from backend.services.supabase_service import supabase_service
 from backend.services.gemini_service import gemini_service
+from backend.services.transformer_service import transformer_service
+from backend.services.rag_database import rag_database
 
 router = APIRouter(prefix="/api", tags=["projects"])
 
@@ -87,7 +89,7 @@ def improve_problem(req: ImproveProblemRequest):
 def improve_idea(req: ImproveIdeaRequest):
     if not req.initial_idea or len(req.initial_idea.strip()) < 5:
         raise HTTPException(status_code=400, detail="Initial idea too short")
-    result = gemini_service.improve_initial_idea(req.initial_idea, req.problem_statement)
+    result = gemini_service.improve_initial_idea(req.initial_idea, req.problem_statement or "")
     return result
 
 @router.post("/projects/{project_id}/extract-requirements")
@@ -197,7 +199,7 @@ def seed_demo_project():
             "page_number": 1,
             "section_title": "Executive Overview & Problem Context",
             "content": "Public sector information architecture suffers from extreme fragmentation. Over 45,000 distinct civic portals and municipal ordinances exist across regional jurisdictions. Citizens frequently fail to claim legitimate social welfare benefits due to dense administrative jargon.",
-            "embedding": gemini_service.generate_embedding("Public sector information architecture fragmentation civic portals welfare benefits"),
+            "embedding": transformer_service.generate_embedding("Public sector information architecture fragmentation civic portals welfare benefits"),
             "metadata": {"doc_name": "CivicLens_System_Architecture_Whitepaper.pdf"}
         },
         {
@@ -208,11 +210,13 @@ def seed_demo_project():
             "page_number": 2,
             "section_title": "Statutory Knowledge Retrieval Architecture",
             "content": "CivicLens AI implements a hybrid retrieval framework: Document parser ingest PDF/DOCX/PPTX, vector pipeline with Gemini embeddings, and strict grounding where answers must cite statutory chapter, section, and page index.",
-            "embedding": gemini_service.generate_embedding("CivicLens AI hybrid retrieval framework document parser vector pipeline gemini embeddings citations"),
+            "embedding": transformer_service.generate_embedding("CivicLens AI hybrid retrieval framework document parser vector pipeline gemini embeddings citations"),
             "metadata": {"doc_name": "CivicLens_System_Architecture_Whitepaper.pdf"}
         }
     ]
     supabase_service.save_chunks(chunks)
+    for c in chunks:
+        rag_database.register_chunk(c)
 
     # 3. Demo Evaluation
     eval_id = "demo-eval-001"

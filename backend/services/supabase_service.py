@@ -4,7 +4,7 @@ import os
 import re
 import sqlite3
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from supabase import create_client, Client
@@ -26,11 +26,14 @@ class SupabaseService:
         self._init_sqlite()
 
         # Connect to Supabase
-        try:
-            self.client = create_client(self.url, self.key)
-            print(f"Supabase client initialized: {self.url}")
-        except Exception as e:
-            print(f"Supabase client initialization warning: {e}")
+        if self.url and self.key:
+            try:
+                self.client = create_client(self.url, self.key)
+                print(f"Supabase client initialized: {self.url}")
+            except Exception as e:
+                print(f"Supabase client initialization warning: {e}")
+        else:
+            print("Supabase URL/Key not set - running in standalone SQLite persistent local mode.")
 
     def _init_sqlite(self):
         with sqlite3.connect(self.db_path) as conn:
@@ -210,7 +213,7 @@ class SupabaseService:
 
     def save_project(self, project_data: Dict[str, Any]) -> Dict[str, Any]:
         p_id = project_data.get("id") or str(uuid.uuid4())
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         
         target_users = json.dumps(project_data.get("target_users", []))
         technologies = json.dumps(project_data.get("technologies", []))
@@ -249,26 +252,23 @@ class SupabaseService:
             ))
             
             # Save requirements if provided
-            reqs = project_data.get("requirements", [])
-            for req in reqs:
-                r_id = req.get("id") or str(uuid.uuid4())
-                c.execute("""
-                    INSERT INTO project_requirements (id, project_id, category, requirement, priority, status, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(id) DO UPDATE SET
-                        category=excluded.category,
-                        requirement=excluded.requirement,
-                        priority=excluded.priority,
-                        status=excluded.status
-                """, (
-                    r_id,
-                    p_id,
-                    req.get("category", "functional"),
-                    req.get("requirement", ""),
-                    req.get("priority", "MEDIUM"),
-                    req.get("status", "pending"),
-                    req.get("created_at", now)
-                ))
+            reqs = project_data.get("requirements")
+            if reqs is not None and len(reqs) > 0:
+                c.execute("DELETE FROM project_requirements WHERE project_id = ?", (p_id,))
+                for req in reqs:
+                    r_id = req.get("id") or str(uuid.uuid4())
+                    c.execute("""
+                        INSERT INTO project_requirements (id, project_id, category, requirement, priority, status, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        r_id,
+                        p_id,
+                        req.get("category", "functional"),
+                        req.get("requirement", ""),
+                        req.get("priority", "MEDIUM"),
+                        req.get("status", "pending"),
+                        req.get("created_at", now)
+                    ))
             conn.commit()
 
         # Attempt Supabase sync
@@ -291,7 +291,7 @@ class SupabaseService:
             except Exception:
                 pass
 
-        return self.get_project(p_id)
+        return self.get_project(p_id) or {}
 
     def delete_project(self, project_id: str) -> bool:
         with sqlite3.connect(self.db_path) as conn:
@@ -311,7 +311,7 @@ class SupabaseService:
     # =========================================================================
     def save_document(self, doc_data: Dict[str, Any]) -> Dict[str, Any]:
         d_id = doc_data.get("id") or str(uuid.uuid4())
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         with sqlite3.connect(self.db_path) as conn:
             c = conn.cursor()
             c.execute("""
@@ -336,7 +336,7 @@ class SupabaseService:
                 now
             ))
             conn.commit()
-        return self.get_document(d_id)
+        return self.get_document(d_id) or {}
 
     def get_document(self, doc_id: str) -> Optional[Dict[str, Any]]:
         with sqlite3.connect(self.db_path) as conn:
@@ -376,7 +376,7 @@ class SupabaseService:
         return True
 
     def save_chunks(self, chunks: List[Dict[str, Any]]):
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         with sqlite3.connect(self.db_path) as conn:
             c = conn.cursor()
             for chunk in chunks:
@@ -481,7 +481,7 @@ class SupabaseService:
     # =========================================================================
     def save_evaluation(self, eval_data: Dict[str, Any]) -> Dict[str, Any]:
         e_id = eval_data.get("id") or str(uuid.uuid4())
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         
         strengths = json.dumps(eval_data.get("strengths", []))
         weaknesses = json.dumps(eval_data.get("weaknesses", []))
@@ -548,7 +548,7 @@ class SupabaseService:
             """, (eval_data.get("overall_score", 0), now, eval_data.get("project_id")))
             conn.commit()
 
-        return self.get_evaluation(e_id)
+        return self.get_evaluation(e_id) or {}
 
     def get_evaluation(self, eval_id: str) -> Optional[Dict[str, Any]]:
         with sqlite3.connect(self.db_path) as conn:
@@ -600,7 +600,7 @@ class SupabaseService:
 
     def save_board_item(self, item_data: Dict[str, Any]) -> Dict[str, Any]:
         i_id = item_data.get("id") or str(uuid.uuid4())
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         with sqlite3.connect(self.db_path) as conn:
             c = conn.cursor()
             c.execute("""
@@ -662,17 +662,19 @@ class SupabaseService:
                 sessions.append(dict(r))
         return sessions
 
-    def create_chat_session(self, project_id: str, user_id: str = "demo-user", title: str = "New Conversation") -> Dict[str, Any]:
+    def create_chat_session(self, project_id: str, user_id: Optional[str] = "demo-user", title: Optional[str] = "New Conversation") -> Dict[str, Any]:
         s_id = str(uuid.uuid4())
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
+        uid = user_id or "demo-user"
+        t = title or "New Conversation"
         with sqlite3.connect(self.db_path) as conn:
             c = conn.cursor()
             c.execute("""
                 INSERT INTO chat_sessions (id, project_id, user_id, title, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?)
-            """, (s_id, project_id, user_id, title, now, now))
+            """, (s_id, project_id, uid, t, now, now))
             conn.commit()
-        return {"id": s_id, "project_id": project_id, "user_id": user_id, "title": title, "created_at": now, "updated_at": now}
+        return {"id": s_id, "project_id": project_id, "user_id": uid, "title": t, "created_at": now, "updated_at": now}
 
     def get_chat_messages(self, session_id: str) -> List[Dict[str, Any]]:
         messages = []
@@ -686,22 +688,23 @@ class SupabaseService:
                 messages.append(m)
         return messages
 
-    def save_chat_message(self, session_id: str, role: str, content: str, citations: List[Dict[str, Any]] = None, user_id: str = "demo-user") -> Dict[str, Any]:
+    def save_chat_message(self, session_id: str, role: str, content: str, citations: Optional[List[Dict[str, Any]]] = None, user_id: Optional[str] = "demo-user") -> Dict[str, Any]:
         m_id = str(uuid.uuid4())
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
+        uid = user_id or "demo-user"
         citations_str = json.dumps(citations or [])
         with sqlite3.connect(self.db_path) as conn:
             c = conn.cursor()
             c.execute("""
                 INSERT INTO chat_messages (id, session_id, user_id, role, content, citations, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (m_id, session_id, user_id, role, content, citations_str, now))
+            """, (m_id, session_id, uid, role, content, citations_str, now))
             c.execute("UPDATE chat_sessions SET updated_at = ? WHERE id = ?", (now, session_id))
             conn.commit()
         return {
             "id": m_id,
             "session_id": session_id,
-            "user_id": user_id,
+            "user_id": uid,
             "role": role,
             "content": content,
             "citations": citations or [],

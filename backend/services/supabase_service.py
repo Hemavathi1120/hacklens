@@ -162,14 +162,14 @@ class SupabaseService:
     # PROJECTS
     # =========================================================================
     def get_projects(self, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        if not user_id:
+            return []
+        
         projects = []
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             c = conn.cursor()
-            if user_id:
-                c.execute("SELECT * FROM projects WHERE user_id = ? OR user_id = 'demo-user' ORDER BY updated_at DESC", (user_id,))
-            else:
-                c.execute("SELECT * FROM projects ORDER BY updated_at DESC")
+            c.execute("SELECT * FROM projects WHERE user_id = ? ORDER BY updated_at DESC", (user_id,))
             rows = c.fetchall()
             for r in rows:
                 p = dict(r)

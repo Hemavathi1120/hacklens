@@ -13,9 +13,17 @@ export default function ProjectsListPage() {
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    api.getProjects(user?.id || 'demo-user')
-      .then((data) => setProjects(data))
-      .catch((err) => console.error(err))
+    if (!user?.id) {
+      setProjects([]);
+      setLoading(false);
+      return;
+    }
+    api.getProjects(user.id)
+      .then((data) => setProjects(data || []))
+      .catch((err) => {
+        console.error(err);
+        setProjects([]);
+      })
       .finally(() => setLoading(false));
   }, [user]);
 

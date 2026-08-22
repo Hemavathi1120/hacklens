@@ -11,7 +11,8 @@ import {
   Clock, 
   Sparkles, 
   SlidersHorizontal,
-  Trash2
+  Trash2,
+  Zap
 } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import ScoreRing from '../components/ScoreRing';
@@ -29,12 +30,18 @@ export default function DashboardPage() {
   const [sortBy, setSortBy] = useState('recent'); // 'recent', 'score_high', 'score_low'
 
   const fetchProjects = async () => {
+    if (!user?.id) {
+      setProjects([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
-      const list = await api.getProjects(user?.id || 'demo-user');
+      const list = await api.getProjects(user.id);
       setProjects(list);
     } catch (err) {
       console.error('Failed to load projects:', err);
+      setProjects([]);
     } finally {
       setLoading(false);
     }
@@ -64,7 +71,7 @@ export default function DashboardPage() {
     return 'Good evening';
   };
 
-  const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Alex';
+  const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
 
   // Filter & Sort logic
   const filteredProjects = projects
@@ -91,13 +98,13 @@ export default function DashboardPage() {
           <div className="relative z-10 space-y-2">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-              <span className="text-xs uppercase font-bold text-indigo-400 tracking-wider">AI Workspace</span>
+              <span className="text-xs uppercase font-bold text-indigo-400 tracking-wider">Your Project Workspace</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold font-display text-white">
               {getGreeting()}, {userName}
             </h1>
             <p className="text-sm text-slate-400 max-w-lg leading-relaxed">
-              Let's turn your idea into a stronger, hackathon-ready solution with AI evaluation and grounded RAG.
+              Create, evaluate, and manage your private AI projects with grounded RAG insights.
             </p>
           </div>
 
@@ -118,7 +125,7 @@ export default function DashboardPage() {
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Search projects by name or keywords..."
+              placeholder="Search your projects..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-900/80 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
@@ -162,16 +169,20 @@ export default function DashboardPage() {
             <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mx-auto">
               <FolderKanban className="w-6 h-6" />
             </div>
-            <h3 className="text-base font-bold text-white">No projects found</h3>
+            <h3 className="text-base font-bold text-white">No projects in your account</h3>
             <p className="text-xs text-slate-400 max-w-sm mx-auto">
-              {searchTerm ? 'No projects match your search criteria.' : 'Create your first project or explore the demo project.'}
+              {searchTerm 
+                ? 'No projects match your search query.' 
+                : 'You have not added any projects yet. Create your first project to start evaluating!'}
             </p>
-            <Link
-              to="/projects/new"
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-500 transition-all"
-            >
-              <Plus className="w-4 h-4" /> Create New Project
-            </Link>
+            <div className="pt-2 flex items-center justify-center gap-3">
+              <Link
+                to="/projects/new"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-500 transition-all shadow-md shadow-indigo-600/25"
+              >
+                <Plus className="w-4 h-4" /> Create Your First Project
+              </Link>
+            </div>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

@@ -1,8 +1,10 @@
 import React, { useState, useRef } from 'react';
 import { UploadCloud, File, FileText, CheckCircle2, AlertCircle, Loader2, X } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/api';
 
 export default function UploadZone({ projectId, onUploadSuccess }) {
+  const { user } = useAuth();
   const [isDragging, setIsDragging] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState([]);
   const [errorMsg, setErrorMsg] = useState('');
@@ -23,25 +25,25 @@ export default function UploadZone({ projectId, onUploadSuccess }) {
     e.preventDefault();
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      processFiles(e.dataTransfer.files);
+      handleFiles(e.dataTransfer.files);
     }
   };
 
   const handleFileSelect = (e) => {
     if (e.target.files && e.target.files.length > 0) {
-      processFiles(e.target.files);
+      handleFiles(e.target.files);
     }
   };
 
-  const processFiles = async (filesList) => {
-    setErrorMsg('');
+  const handleFiles = async (filesList) => {
     const filesArray = Array.from(filesList);
+    if (filesArray.length === 0) return;
 
-    // Initial state: uploading
+    setErrorMsg('');
     const initialTrackers = filesArray.map((f) => ({
       name: f.name,
-      size: (f.size / 1024).toFixed(1) + ' KB',
-      status: 'uploading', // 'uploading' -> 'processing' -> 'indexed' -> 'failed'
+      size: (f.size / (1024 * 1024)).toFixed(2) + ' MB',
+      status: 'uploading', // uploading, processing, indexed, failed
     }));
     setUploadingFiles(initialTrackers);
 
@@ -53,7 +55,7 @@ export default function UploadZone({ projectId, onUploadSuccess }) {
         );
       }, 600);
 
-      const res = await api.uploadDocuments(projectId, filesArray);
+      const res = await api.uploadDocuments(projectId, filesArray, user?.id || 'anonymous-user');
 
       // Transition to 'indexed'
       setTimeout(() => {

@@ -14,10 +14,12 @@ import {
   Compass
 } from 'lucide-react';
 import ChatMessage from '../components/ChatMessage';
+import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/api';
 
 export default function ChatbotPage() {
   const { project } = useOutletContext();
+  const { user } = useAuth();
   const [searchParams] = useSearchParams();
 
   const [sessions, setSessions] = useState([]);
@@ -99,7 +101,7 @@ export default function ChatbotPage() {
       const newSess = await api.createChatSession(
         project.id,
         `Analysis #${sessions.length + 1}`,
-        'demo-user'
+        user?.id || project.user_id || 'anonymous-user'
       );
       setSessions([newSess, ...sessions]);
       setActiveSessionId(newSess.id);
@@ -131,7 +133,7 @@ export default function ChatbotPage() {
         project_id: project.id,
         session_id: activeSessionId,
         query: userText,
-        user_id: 'demo-user',
+        user_id: user?.id || project.user_id || 'anonymous-user',
       });
 
       if (res.message) {

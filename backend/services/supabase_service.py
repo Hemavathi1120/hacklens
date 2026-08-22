@@ -1,6 +1,7 @@
 import json
 import math
 import os
+import re
 import sqlite3
 import uuid
 from datetime import datetime
@@ -417,11 +418,13 @@ class SupabaseService:
                 chunks.append(ch)
         return chunks
 
-    def vector_search(self, project_id: str, query_embedding: List[float], top_k: int = 6, similarity_threshold: float = 0.25) -> List[Dict[str, Any]]:
+    def vector_search(self, project_id: str, query_embedding: List[float], raw_query: str = "", top_k: int = 6, similarity_threshold: float = 0.15) -> List[Dict[str, Any]]:
         """
-        Calculates cosine similarity between query_embedding and stored document chunk embeddings for the given project.
+        Calculates hybrid cosine similarity and keyword relevance between query and stored document chunk embeddings for the given project.
         """
         results = []
+        query_words = set(re.findall(r'\w+', (raw_query or "").lower()))
+        
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             c = conn.cursor()
@@ -434,16 +437,30 @@ class SupabaseService:
             rows = c.fetchall()
 
             for row in rows:
+                content_lower = (row["content"] or "").lower()
+                title_lower = (row["section_title"] or "").lower()
+                
+                # 1. Cosine Vector Similarity
+                sim = 0.0
                 emb_str = row["embedding"]
-                if not emb_str:
-                    continue
-                emb = json.loads(emb_str)
-                sim = self._cosine_similarity(query_embedding, emb)
-                if sim >= similarity_threshold:
+                if emb_str and query_embedding and any(query_embedding):
+                    emb = json.loads(emb_str)
+                    sim = self._cosine_similarity(query_embedding, emb)
+                
+                # 2. Keyword Overlap Score (0.0 to 1.0)
+                kw_score = 0.0
+                if query_words:
+                    matched_words = sum(1 for w in query_words if w in content_lower or w in title_lower)
+                    kw_score = matched_words / max(len(query_words), 1)
+                
+                # Combined Score
+                combined_score = max(sim, kw_score * 0.85, (sim * 0.7 + kw_score * 0.3))
+                
+                if combined_score >= similarity_threshold or len(rows) <= top_k:
                     item = dict(row)
                     item.pop("embedding", None)
                     item["metadata"] = json.loads(item.get("metadata") or "{}")
-                    item["similarity"] = round(sim, 4)
+                    item["similarity"] = round(combined_score, 4)
                     results.append(item)
 
         results.sort(key=lambda x: x["similarity"], reverse=True)

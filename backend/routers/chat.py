@@ -60,12 +60,13 @@ def execute_rag_chat(req: ChatQueryRequest):
     # 2. Compute query embedding for vector retrieval
     query_emb = gemini_service.generate_embedding(req.query)
 
-    # 3. Retrieve relevant chunks strictly isolated by project_id
+    # 3. Retrieve relevant chunks strictly isolated by project_id using hybrid vector + keyword matching
     retrieved_chunks = supabase_service.vector_search(
         project_id=req.project_id,
         query_embedding=query_emb,
+        raw_query=req.query,
         top_k=5,
-        similarity_threshold=0.20
+        similarity_threshold=0.15
     )
 
     # 4. Fetch recent conversation history

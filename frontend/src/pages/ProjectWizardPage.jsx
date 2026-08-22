@@ -13,7 +13,11 @@ import {
   Compass, 
   Layers, 
   Zap,
-  HelpCircle
+  HelpCircle,
+  UploadCloud,
+  Wand2,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import UploadZone from '../components/UploadZone';
@@ -34,6 +38,9 @@ export default function ProjectWizardPage() {
   const [problemStatement, setProblemStatement] = useState('');
   const [initialIdea, setInitialIdea] = useState('');
   
+  // Document Uploads
+  const [uploadedDocs, setUploadedDocs] = useState([]);
+
   // Structured Requirements
   const [functionalReqs, setFunctionalReqs] = useState(['']);
   const [technicalReqs, setTechnicalReqs] = useState(['']);
@@ -41,21 +48,21 @@ export default function ProjectWizardPage() {
   const [constraints, setConstraints] = useState(['']);
   const [technologies, setTechnologies] = useState(['']);
 
-  // Document Uploads
-  const [uploadedDocs, setUploadedDocs] = useState([]);
-
   // AI Helper Modal State
   const [aiHelperOpen, setAiHelperOpen] = useState(false);
   const [aiHelperMode, setAiHelperMode] = useState('problem'); // 'problem' or 'idea'
 
-  // Loading
+  // Loading States
   const [loading, setLoading] = useState(false);
+  const [extractingFromDocs, setExtractingFromDocs] = useState(false);
+  const [autoFillSuccessMsg, setAutoFillSuccessMsg] = useState('');
 
+  // 5-Step Order with Documents (03) before Requirements (04)
   const steps = [
     { num: 1, label: '01 Problem' },
     { num: 2, label: '02 Idea' },
-    { num: 3, label: '03 Requirements' },
-    { num: 4, label: '04 Documents' },
+    { num: 3, label: '03 Documents' },
+    { num: 4, label: '04 Requirements' },
     { num: 5, label: '05 AI Analysis' },
   ];
 
@@ -78,7 +85,7 @@ export default function ProjectWizardPage() {
     setter(currentList.filter((_, i) => i !== index));
   };
 
-  // Step Navigation & Save
+  // Step Navigation & Save Handlers
   const handleNextStep = async () => {
     if (currentStep === 1) {
       if (!name.trim()) {
@@ -95,9 +102,44 @@ export default function ProjectWizardPage() {
         alert('Please enter your initial solution idea.');
         return;
       }
-      setCurrentStep(3);
+
+      // Create draft project so we have createdProjectId for Step 03 Document uploads
+      setLoading(true);
+      try {
+        if (!createdProjectId) {
+          const payload = {
+            name: name.trim(),
+            description: description.trim() || problemStatement.slice(0, 120),
+            problem_statement: problemStatement.trim(),
+            initial_idea: initialIdea.trim(),
+            target_users: targetUsers.filter(u => u.trim()),
+            technologies: technologies.filter(t => t.trim()),
+            constraints: constraints.filter(c => c.trim()),
+            requirements: [],
+            user_id: user?.id || 'demo-user',
+          };
+          const res = await api.createProject(payload);
+          setCreatedProjectId(res.id);
+        } else {
+          await api.updateProject(createdProjectId, {
+            name: name.trim(),
+            description: description.trim(),
+            problem_statement: problemStatement.trim(),
+            initial_idea: initialIdea.trim(),
+          });
+        }
+        setCurrentStep(3); // Go to Step 03: Documents
+      } catch (err) {
+        alert(err.message || 'Failed to initialize project draft.');
+      } finally {
+        setLoading(false);
+      }
+
     } else if (currentStep === 3) {
-      // Create or update project in backend
+      // Step 3 (Documents) -> Go to Step 4 (Requirements)
+      setCurrentStep(4);
+    } else if (currentStep === 4) {
+      // Step 4 (Requirements) -> Save all requirements and go to Step 5
       setLoading(true);
       try {
         const formattedReqs = [
@@ -106,28 +148,56 @@ export default function ProjectWizardPage() {
           ...constraints.filter(r => r.trim()).map(r => ({ category: 'constraints', requirement: r, priority: 'MEDIUM' })),
         ];
 
-        const payload = {
-          name: name.trim(),
-          description: description.trim() || problemStatement.slice(0, 120),
-          problem_statement: problemStatement.trim(),
-          initial_idea: initialIdea.trim(),
+        await api.updateProject(createdProjectId, {
           target_users: targetUsers.filter(u => u.trim()),
           technologies: technologies.filter(t => t.trim()),
           constraints: constraints.filter(c => c.trim()),
           requirements: formattedReqs,
-          user_id: user?.id || 'demo-user',
-        };
+        });
 
-        const res = await api.createProject(payload);
-        setCreatedProjectId(res.id);
-        setCurrentStep(4);
+        setCurrentStep(5);
       } catch (err) {
-        alert(err.message || 'Failed to save project survey');
+        alert(err.message || 'Failed to save requirements.');
       } finally {
         setLoading(false);
       }
-    } else if (currentStep === 4) {
-      setCurrentStep(5);
+    }
+  };
+
+  // AI Feature: "Read with Documentation" to Auto-Fill Requirements
+  const handleReadWithDocumentation = async () => {
+    if (!createdProjectId) return;
+    setExtractingFromDocs(true);
+    setAutoFillSuccessMsg('');
+
+    try {
+      const extracted = await api.extractRequirements(createdProjectId);
+
+      if (extracted) {
+        if (extracted.functional_requirements?.length) {
+          setFunctionalReqs(extracted.functional_requirements);
+        }
+        if (extracted.technical_requirements?.length) {
+          setTechnicalReqs(extracted.technical_requirements);
+        }
+        if (extracted.target_users?.length) {
+          setTargetUsers(extracted.target_users);
+        }
+        if (extracted.technologies?.length) {
+          setTechnologies(extracted.technologies);
+        }
+        if (extracted.constraints?.length) {
+          setConstraints(extracted.constraints);
+        }
+
+        setAutoFillSuccessMsg('✨ AI successfully analyzed your documents and auto-populated the requirements below! You can further edit or add manual items.');
+        setTimeout(() => setAutoFillSuccessMsg(''), 8000);
+      }
+    } catch (err) {
+      console.error('Error auto-filling from documentation:', err);
+      alert('Could not extract requirements from documentation. You can enter them manually.');
+    } finally {
+      setExtractingFromDocs(false);
     }
   };
 
@@ -178,7 +248,7 @@ export default function ProjectWizardPage() {
                   {s.label}
                 </span>
                 {s.num < steps.length && (
-                  <div className="w-6 sm:w-12 h-px bg-slate-800 ml-2" />
+                  <div className="w-6 sm:w-12 h-px bg-slate-800 mx-1" />
                 )}
               </div>
             );
@@ -188,13 +258,11 @@ export default function ProjectWizardPage() {
         {/* STEP 1: PROBLEM STATEMENT */}
         {currentStep === 1 && (
           <div className="p-7 sm:p-9 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-6 shadow-xl animate-in fade-in">
-            <div>
-              <span className="text-xs uppercase font-bold text-rose-400 tracking-wider">Step 01</span>
-              <h2 className="text-xl sm:text-2xl font-bold font-display text-white mt-1">
-                What problem are you trying to solve?
-              </h2>
-              <p className="text-xs text-slate-400 mt-1">
-                Give your project a name and define the core real-world pain point.
+            <div className="space-y-1">
+              <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider">Step 01</span>
+              <h2 className="text-xl font-bold font-display text-white">Define the Problem Statement</h2>
+              <p className="text-xs text-slate-400">
+                Specify who faces this challenge and why current alternatives fail.
               </p>
             </div>
 
@@ -205,8 +273,19 @@ export default function ProjectWizardPage() {
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g., CivicLens AI, MediCare RAG, FinAudit AI..."
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white focus:outline-none focus:border-indigo-500"
+                  placeholder="e.g. CivicLens AI"
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Brief Description (Optional)</label>
+                <input
+                  type="text"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="e.g. AI-powered municipal intelligence and legal citation assistant."
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
@@ -219,362 +298,432 @@ export default function ProjectWizardPage() {
                       setAiHelperMode('problem');
                       setAiHelperOpen(true);
                     }}
-                    className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1 bg-indigo-500/10 px-2.5 py-1 rounded-lg border border-indigo-500/20"
+                    className="inline-flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 font-semibold"
                   >
-                    <Sparkles className="w-3 h-3 text-indigo-400" /> Need help defining the problem?
+                    <Sparkles className="w-3.5 h-3.5" /> Need help defining the problem?
                   </button>
                 </div>
                 <textarea
                   rows={5}
                   value={problemStatement}
                   onChange={(e) => setProblemStatement(e.target.value)}
-                  placeholder="Describe the real-world problem your project is trying to solve in detail..."
-                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 resize-none leading-relaxed"
+                  placeholder="Describe the exact pain point, affected user group, current manual workarounds, and why this problem is urgent..."
+                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 leading-relaxed"
                 />
-                <div className="flex justify-end text-[11px] text-slate-500 mt-1">
-                  {problemStatement.length} characters
+                <div className="flex justify-between text-[11px] text-slate-500 mt-1">
+                  <span>Aim for specific, measurable pain points.</span>
+                  <span>{problemStatement.length} characters</span>
                 </div>
               </div>
             </div>
 
-            <div className="flex justify-end pt-4 border-t border-slate-800">
+            <div className="flex justify-end pt-4">
               <button
                 onClick={handleNextStep}
                 className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-2 shadow-lg shadow-indigo-600/30 transition-all"
               >
-                Next: Initial Idea <ArrowRight className="w-3.5 h-3.5" />
+                Next: Solution Idea <ArrowRight className="w-4 h-4" />
               </button>
             </div>
           </div>
         )}
 
-        {/* STEP 2: INITIAL IDEA */}
+        {/* STEP 2: INITIAL SOLUTION IDEA */}
         {currentStep === 2 && (
           <div className="p-7 sm:p-9 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-6 shadow-xl animate-in fade-in">
-            <div>
-              <span className="text-xs uppercase font-bold text-indigo-400 tracking-wider">Step 02</span>
-              <h2 className="text-xl sm:text-2xl font-bold font-display text-white mt-1">
-                What is your initial idea?
-              </h2>
-              <p className="text-xs text-slate-400 mt-1">
-                Explain your proposed solution in simple terms.
+            <div className="space-y-1">
+              <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider">Step 02</span>
+              <h2 className="text-xl font-bold font-display text-white">Your Initial Solution Idea</h2>
+              <p className="text-xs text-slate-400">
+                Outline how your application intends to solve the core problem.
               </p>
             </div>
 
             <div className="space-y-4">
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-semibold text-slate-300">Solution Idea *</label>
+                  <label className="text-xs font-semibold text-slate-300">Solution Concept *</label>
                   <button
                     type="button"
                     onClick={() => {
                       setAiHelperMode('idea');
                       setAiHelperOpen(true);
                     }}
-                    className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1 bg-indigo-500/10 px-2.5 py-1 rounded-lg border border-indigo-500/20"
+                    className="inline-flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 font-semibold"
                   >
-                    <Sparkles className="w-3 h-3 text-indigo-400" /> Improve my idea
+                    <Sparkles className="w-3.5 h-3.5" /> Improve my idea
                   </button>
                 </div>
                 <textarea
-                  rows={5}
+                  rows={6}
                   value={initialIdea}
                   onChange={(e) => setInitialIdea(e.target.value)}
-                  placeholder="Explain your initial solution idea in simple words..."
-                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 resize-none leading-relaxed"
+                  placeholder="Describe your core architecture, AI model integration, user experience, and key differentiators..."
+                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 leading-relaxed"
                 />
-                <div className="flex justify-end text-[11px] text-slate-500 mt-1">
-                  {initialIdea.length} characters
+                <div className="flex justify-between text-[11px] text-slate-500 mt-1">
+                  <span>Highlight your technical differentiators and user workflow.</span>
+                  <span>{initialIdea.length} characters</span>
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center justify-between pt-4 border-t border-slate-800">
+            <div className="flex justify-between items-center pt-4">
               <button
                 onClick={() => setCurrentStep(1)}
-                className="px-5 py-2 rounded-xl text-slate-400 hover:text-white text-xs font-semibold flex items-center gap-1.5"
+                className="px-5 py-2.5 rounded-xl border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 text-xs font-semibold flex items-center gap-2 transition-all"
               >
-                <ArrowLeft className="w-3.5 h-3.5" /> Back
+                <ArrowLeft className="w-4 h-4" /> Back
               </button>
+
               <button
                 onClick={handleNextStep}
+                disabled={loading}
                 className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-2 shadow-lg shadow-indigo-600/30 transition-all"
               >
-                Next: Requirements <ArrowRight className="w-3.5 h-3.5" />
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <>Next: Upload Documents <ArrowRight className="w-4 h-4" /></>}
               </button>
             </div>
           </div>
         )}
 
-        {/* STEP 3: STRUCTURED REQUIREMENTS */}
+        {/* STEP 3: UPLOAD DOCUMENTATION (Swapped to Step 03) */}
         {currentStep === 3 && (
           <div className="p-7 sm:p-9 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-6 shadow-xl animate-in fade-in">
-            <div>
-              <span className="text-xs uppercase font-bold text-blue-400 tracking-wider">Step 03</span>
-              <h2 className="text-xl sm:text-2xl font-bold font-display text-white mt-1">
-                What are the requirements?
-              </h2>
-              <p className="text-xs text-slate-400 mt-1">
-                Break down functional specs, technical constraints, target users, and technology preferences.
+            <div className="space-y-1">
+              <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider">Step 03</span>
+              <h2 className="text-xl font-bold font-display text-white">Upload Project Documentation</h2>
+              <p className="text-xs text-slate-400">
+                Upload your slides, whitepapers, design docs, or requirements files (PDF, PPT, PPTX, DOC, DOCX, TXT, MD). 
+                The AI will read these files to auto-fill your requirements and build a private RAG knowledge base.
               </p>
             </div>
 
-            {/* Functional Requirements */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold uppercase tracking-wider text-indigo-300">
-                  Functional Requirements
-                </label>
-                <button
-                  type="button"
-                  onClick={() => addListField(setFunctionalReqs, functionalReqs)}
-                  className="text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1"
-                >
-                  <Plus className="w-3 h-3" /> Add requirement
-                </button>
+            <div className="p-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-xs text-indigo-300 flex items-start gap-3">
+              <Sparkles className="w-5 h-5 text-indigo-400 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold text-indigo-200">Smart Document Ingestion</p>
+                <p className="text-[11px] text-indigo-300/80 mt-0.5">
+                  In the next step, you can click <strong>"Read with Documentation"</strong> to let the AI automatically extract functional specs, tech stack, and user personas from your uploaded files!
+                </p>
               </div>
-              {functionalReqs.map((req, idx) => (
-                <div key={idx} className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={req}
-                    onChange={(e) => updateListField(setFunctionalReqs, functionalReqs, idx, e.target.value)}
-                    placeholder={`e.g. Document parsing with page-level citations...`}
-                    className="flex-1 px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-indigo-500"
-                  />
-                  <button
-                    onClick={() => removeListField(setFunctionalReqs, functionalReqs, idx)}
-                    className="p-2 text-slate-500 hover:text-rose-400"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))}
             </div>
 
-            {/* Technical Requirements */}
-            <div className="space-y-2 pt-2 border-t border-slate-800/80">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold uppercase tracking-wider text-purple-300">
-                  Technical Requirements
-                </label>
-                <button
-                  type="button"
-                  onClick={() => addListField(setTechnicalReqs, technicalReqs)}
-                  className="text-[11px] text-purple-400 hover:text-purple-300 font-semibold flex items-center gap-1"
-                >
-                  <Plus className="w-3 h-3" /> Add requirement
-                </button>
-              </div>
-              {technicalReqs.map((req, idx) => (
-                <div key={idx} className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={req}
-                    onChange={(e) => updateListField(setTechnicalReqs, technicalReqs, idx, e.target.value)}
-                    placeholder={`e.g. Vector similarity search using Supabase pgvector...`}
-                    className="flex-1 px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-indigo-500"
-                  />
-                  <button
-                    onClick={() => removeListField(setTechnicalReqs, technicalReqs, idx)}
-                    className="p-2 text-slate-500 hover:text-rose-400"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
+            {createdProjectId && (
+              <UploadZone
+                projectId={createdProjectId}
+                onUploadSuccess={(newDocs) => {
+                  setUploadedDocs((prev) => [...prev, ...newDocs]);
+                }}
+              />
+            )}
 
-            {/* Target Users */}
-            <div className="space-y-2 pt-2 border-t border-slate-800/80">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold uppercase tracking-wider text-emerald-300">
-                  Target Users
-                </label>
-                <button
-                  type="button"
-                  onClick={() => addListField(setTargetUsers, targetUsers)}
-                  className="text-[11px] text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-1"
-                >
-                  <Plus className="w-3 h-3" /> Add user
-                </button>
-              </div>
-              {targetUsers.map((userRole, idx) => (
-                <div key={idx} className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={userRole}
-                    onChange={(e) => updateListField(setTargetUsers, targetUsers, idx, e.target.value)}
-                    placeholder={`e.g. Municipal officers, Citizens, Compliance auditors...`}
-                    className="flex-1 px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-indigo-500"
-                  />
-                  <button
-                    onClick={() => removeListField(setTargetUsers, targetUsers, idx)}
-                    className="p-2 text-slate-500 hover:text-rose-400"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            {/* Constraints */}
-            <div className="space-y-2 pt-2 border-t border-slate-800/80">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold uppercase tracking-wider text-amber-300">
-                  Constraints & Security Requirements
-                </label>
-                <button
-                  type="button"
-                  onClick={() => addListField(setConstraints, constraints)}
-                  className="text-[11px] text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1"
-                >
-                  <Plus className="w-3 h-3" /> Add constraint
-                </button>
-              </div>
-              {constraints.map((c, idx) => (
-                <div key={idx} className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={c}
-                    onChange={(e) => updateListField(setConstraints, constraints, idx, e.target.value)}
-                    placeholder={`e.g. Strict data privacy under GDPR, sub-2s response latency...`}
-                    className="flex-1 px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-indigo-500"
-                  />
-                  <button
-                    onClick={() => removeListField(setConstraints, constraints, idx)}
-                    className="p-2 text-slate-500 hover:text-rose-400"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex items-center justify-between pt-4 border-t border-slate-800">
+            <div className="flex justify-between items-center pt-4">
               <button
                 onClick={() => setCurrentStep(2)}
-                className="px-5 py-2 rounded-xl text-slate-400 hover:text-white text-xs font-semibold flex items-center gap-1.5"
+                className="px-5 py-2.5 rounded-xl border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 text-xs font-semibold flex items-center gap-2 transition-all"
               >
-                <ArrowLeft className="w-3.5 h-3.5" /> Back
+                <ArrowLeft className="w-4 h-4" /> Back
               </button>
-              <button
-                onClick={handleNextStep}
-                disabled={loading}
-                className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold flex items-center gap-2 shadow-lg shadow-indigo-600/30 transition-all"
-              >
-                {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Continue to Documentation'}
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-        )}
 
-        {/* STEP 4: DOCUMENT UPLOAD */}
-        {currentStep === 4 && (
-          <div className="p-7 sm:p-9 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-6 shadow-xl animate-in fade-in">
-            <div>
-              <span className="text-xs uppercase font-bold text-amber-400 tracking-wider">Step 04</span>
-              <h2 className="text-xl sm:text-2xl font-bold font-display text-white mt-1">
-                Give your AI the project context.
-              </h2>
-              <p className="text-xs text-slate-400 mt-1">
-                Upload your project documentation and let ProjectLens index and understand it.
-              </p>
-            </div>
-
-            <UploadZone
-              projectId={createdProjectId}
-              onUploadSuccess={(docs) => {
-                setUploadedDocs((prev) => [...prev, ...docs]);
-              }}
-            />
-
-            <div className="flex items-center justify-between pt-4 border-t border-slate-800">
-              <button
-                onClick={() => setCurrentStep(3)}
-                className="px-5 py-2 rounded-xl text-slate-400 hover:text-white text-xs font-semibold flex items-center gap-1.5"
-              >
-                <ArrowLeft className="w-3.5 h-3.5" /> Back
-              </button>
               <button
                 onClick={handleNextStep}
                 className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-2 shadow-lg shadow-indigo-600/30 transition-all"
               >
-                Review Summary <ArrowRight className="w-3.5 h-3.5" />
+                Next: Define Requirements <ArrowRight className="w-4 h-4" />
               </button>
             </div>
           </div>
         )}
 
-        {/* STEP 5: PROJECT SUMMARY & AI ANALYSIS */}
-        {currentStep === 5 && (
+        {/* STEP 4: PROJECT REQUIREMENTS (Manual + Read with Documentation) */}
+        {currentStep === 4 && (
           <div className="p-7 sm:p-9 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-6 shadow-xl animate-in fade-in">
-            <div>
-              <span className="text-xs uppercase font-bold text-emerald-400 tracking-wider">Step 05</span>
-              <h2 className="text-xl sm:text-2xl font-bold font-display text-white mt-1">
-                Project Summary & AI Launch
-              </h2>
-              <p className="text-xs text-slate-400 mt-1">
-                Review your configuration before launching Gemini 12-category evaluation & AI Board generation.
-              </p>
-            </div>
-
-            <div className="space-y-4 rounded-2xl bg-slate-950/60 border border-slate-800/80 p-5 text-xs text-slate-300">
-              <div>
-                <span className="font-bold text-slate-400 uppercase tracking-wider text-[10px]">Project:</span>
-                <p className="text-sm font-semibold text-white mt-0.5">{name}</p>
+            
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider">Step 04</span>
+                <h2 className="text-xl font-bold font-display text-white">Project Requirements & Specifications</h2>
+                <p className="text-xs text-slate-400">
+                  Fill manually, or click below to let AI extract requirements directly from your uploaded documentation.
+                </p>
               </div>
 
-              <div className="pt-2 border-t border-slate-900">
-                <span className="font-bold text-slate-400 uppercase tracking-wider text-[10px]">Problem Statement:</span>
-                <p className="text-slate-200 mt-0.5 leading-relaxed">{problemStatement}</p>
-              </div>
-
-              <div className="pt-2 border-t border-slate-900">
-                <span className="font-bold text-slate-400 uppercase tracking-wider text-[10px]">Initial Idea:</span>
-                <p className="text-slate-200 mt-0.5 leading-relaxed">{initialIdea}</p>
-              </div>
-
-              <div className="pt-2 border-t border-slate-900">
-                <span className="font-bold text-slate-400 uppercase tracking-wider text-[10px]">Requirements:</span>
-                <ul className="mt-1 space-y-1 text-slate-300 list-disc list-inside">
-                  {functionalReqs.filter(r => r.trim()).map((r, i) => (
-                    <li key={i}>[Func] {r}</li>
-                  ))}
-                  {technicalReqs.filter(r => r.trim()).map((r, i) => (
-                    <li key={i}>[Tech] {r}</li>
-                  ))}
-                </ul>
-              </div>
-
-              <div className="pt-2 border-t border-slate-900 flex items-center justify-between text-slate-400">
-                <span>Uploaded Documents:</span>
-                <span className="font-semibold text-indigo-400">{uploadedDocs.length} files indexed</span>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between pt-4 border-t border-slate-800">
+              {/* Read with Documentation Button */}
               <button
-                onClick={() => setCurrentStep(4)}
-                className="px-5 py-2 rounded-xl text-slate-400 hover:text-white text-xs font-semibold flex items-center gap-1.5"
+                type="button"
+                onClick={handleReadWithDocumentation}
+                disabled={extractingFromDocs}
+                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-50 text-white text-xs font-bold shadow-lg shadow-indigo-600/25 flex items-center gap-2 transition-all hover:scale-[1.02] flex-shrink-0"
               >
-                <ArrowLeft className="w-3.5 h-3.5" /> Back
-              </button>
-              <button
-                onClick={handleLaunchAnalysis}
-                disabled={loading}
-                className="px-7 py-3 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-xs sm:text-sm font-bold shadow-xl shadow-indigo-600/30 flex items-center gap-2 transition-all hover:scale-[1.02]"
-              >
-                {loading ? (
+                {extractingFromDocs ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Running 12-Category AI Evaluation...
+                    <Loader2 className="w-4 h-4 animate-spin" /> Reading Documentation...
                   </>
                 ) : (
                   <>
-                    <Zap className="w-4 h-4" />
-                    Launch AI Evaluation & AI Board
+                    <Wand2 className="w-4 h-4" /> Read with Documentation
+                  </>
+                )}
+              </button>
+            </div>
+
+            {autoFillSuccessMsg && (
+              <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-start gap-2.5 text-xs text-emerald-300 animate-in fade-in">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                <span>{autoFillSuccessMsg}</span>
+              </div>
+            )}
+
+            <div className="space-y-6">
+              
+              {/* 1. Functional Requirements */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-300">Functional Requirements</label>
+                  <button
+                    type="button"
+                    onClick={() => addListField(setFunctionalReqs, functionalReqs)}
+                    className="text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add Requirement
+                  </button>
+                </div>
+                {functionalReqs.map((req, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={req}
+                      onChange={(e) => updateListField(setFunctionalReqs, functionalReqs, idx, e.target.value)}
+                      placeholder={`e.g. System allows natural language statutory search with source citations...`}
+                      className="flex-1 px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeListField(setFunctionalReqs, functionalReqs, idx)}
+                      className="p-2 text-slate-500 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* 2. Technical Requirements */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-300">Technical Requirements & Architecture</label>
+                  <button
+                    type="button"
+                    onClick={() => addListField(setTechnicalReqs, technicalReqs)}
+                    className="text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add Tech Spec
+                  </button>
+                </div>
+                {technicalReqs.map((req, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={req}
+                      onChange={(e) => updateListField(setTechnicalReqs, technicalReqs, idx, e.target.value)}
+                      placeholder={`e.g. Sub-500ms vector search response time with pgvector...`}
+                      className="flex-1 px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeListField(setTechnicalReqs, technicalReqs, idx)}
+                      className="p-2 text-slate-500 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* 3. Target Users */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-300">Target User Personas</label>
+                  <button
+                    type="button"
+                    onClick={() => addListField(setTargetUsers, targetUsers)}
+                    className="text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add Persona
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {targetUsers.map((user, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={user}
+                        onChange={(e) => updateListField(setTargetUsers, targetUsers, idx, e.target.value)}
+                        placeholder="e.g. Legal Researchers / Citizens"
+                        className="flex-1 px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeListField(setTargetUsers, targetUsers, idx)}
+                        className="p-2 text-slate-500 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 4. Technologies */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-300">Technologies & Frameworks</label>
+                  <button
+                    type="button"
+                    onClick={() => addListField(setTechnologies, technologies)}
+                    className="text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add Technology
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {technologies.map((tech, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={tech}
+                        onChange={(e) => updateListField(setTechnologies, technologies, idx, e.target.value)}
+                        placeholder="e.g. React, Python, Supabase, Gemini"
+                        className="flex-1 px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeListField(setTechnologies, technologies, idx)}
+                        className="p-2 text-slate-500 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 5. Constraints */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-300">Constraints & Compliance</label>
+                  <button
+                    type="button"
+                    onClick={() => addListField(setConstraints, constraints)}
+                    className="text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add Constraint
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {constraints.map((c, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={c}
+                        onChange={(e) => updateListField(setConstraints, constraints, idx, e.target.value)}
+                        placeholder="e.g. Strict tenant privacy, Zero hallucination"
+                        className="flex-1 px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeListField(setConstraints, constraints, idx)}
+                        className="p-2 text-slate-500 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+            </div>
+
+            <div className="flex justify-between items-center pt-4">
+              <button
+                onClick={() => setCurrentStep(3)}
+                className="px-5 py-2.5 rounded-xl border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 text-xs font-semibold flex items-center gap-2 transition-all"
+              >
+                <ArrowLeft className="w-4 h-4" /> Back to Documents
+              </button>
+
+              <button
+                onClick={handleNextStep}
+                disabled={loading}
+                className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-2 shadow-lg shadow-indigo-600/30 transition-all"
+              >
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <>Review & Launch AI Analysis <ArrowRight className="w-4 h-4" /></>}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 5: REVIEW & LAUNCH AI ANALYSIS */}
+        {currentStep === 5 && (
+          <div className="p-7 sm:p-9 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-6 shadow-xl animate-in fade-in">
+            <div className="space-y-1">
+              <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider">Step 05</span>
+              <h2 className="text-xl font-bold font-display text-white">Review & Launch AI Evaluation</h2>
+              <p className="text-xs text-slate-400">
+                Confirm your project definition and trigger the 12-dimensional evaluation matrix.
+              </p>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800/80 space-y-1">
+                <span className="text-slate-400 font-semibold uppercase text-[10px]">Project Name</span>
+                <p className="font-bold text-white text-sm">{name}</p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800/80 space-y-1">
+                <span className="text-slate-400 font-semibold uppercase text-[10px]">Problem Statement</span>
+                <p className="text-slate-200 leading-relaxed">{problemStatement}</p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800/80 space-y-1">
+                <span className="text-slate-400 font-semibold uppercase text-[10px]">Solution Idea</span>
+                <p className="text-slate-200 leading-relaxed">{initialIdea}</p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800/80 space-y-1">
+                  <span className="text-slate-400 font-semibold uppercase text-[10px]">Functional Requirements</span>
+                  <p className="text-slate-200 font-semibold">{functionalReqs.filter(r => r.trim()).length} requirements defined</p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800/80 space-y-1">
+                  <span className="text-slate-400 font-semibold uppercase text-[10px]">Technical Specs</span>
+                  <p className="text-slate-200 font-semibold">{technicalReqs.filter(r => r.trim()).length} specs defined</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-between items-center pt-4">
+              <button
+                onClick={() => setCurrentStep(4)}
+                className="px-5 py-2.5 rounded-xl border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 text-xs font-semibold flex items-center gap-2 transition-all"
+              >
+                <ArrowLeft className="w-4 h-4" /> Back to Requirements
+              </button>
+
+              <button
+                onClick={handleLaunchAnalysis}
+                disabled={loading}
+                className="px-7 py-3 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold text-xs sm:text-sm shadow-xl shadow-indigo-600/30 flex items-center gap-2 transition-all hover:scale-[1.02]"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" /> Evaluating Project Dimensions...
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-4 h-4" /> Launch 12-Dimensional AI Evaluation
                   </>
                 )}
               </button>
@@ -589,16 +738,13 @@ export default function ProjectWizardPage() {
         isOpen={aiHelperOpen}
         onClose={() => setAiHelperOpen(false)}
         mode={aiHelperMode}
-        initialText={aiHelperMode === 'problem' ? problemStatement : initialIdea}
+        currentText={aiHelperMode === 'problem' ? problemStatement : initialIdea}
         problemContext={problemStatement}
-        onApply={(text, extra) => {
+        onApply={(text) => {
           if (aiHelperMode === 'problem') {
             setProblemStatement(text);
           } else {
             setInitialIdea(text);
-            if (extra && extra.length) {
-              setTechnologies(extra);
-            }
           }
         }}
       />

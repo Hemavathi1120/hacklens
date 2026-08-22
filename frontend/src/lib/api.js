@@ -39,6 +39,7 @@ export const api = {
   // AI Helpers
   improveProblem: (problem_statement) => request('/api/ai/improve-problem', { method: 'POST', body: JSON.stringify({ problem_statement }) }),
   improveIdea: (initial_idea, problem_statement) => request('/api/ai/improve-idea', { method: 'POST', body: JSON.stringify({ initial_idea, problem_statement }) }),
+  extractRequirements: (projectId) => request(`/api/projects/${projectId}/extract-requirements`, { method: 'POST' }),
 
   // Documents
   getDocuments: (projectId) => request(`/api/projects/${projectId}/documents`),

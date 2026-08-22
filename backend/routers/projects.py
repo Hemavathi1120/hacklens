@@ -37,6 +37,12 @@ class ImproveIdeaRequest(BaseModel):
     initial_idea: str
     problem_statement: Optional[str] = ""
 
+class ExtractRequirementsRequest(BaseModel):
+    project_id: Optional[str] = None
+    document_text: Optional[str] = ""
+    problem_statement: Optional[str] = ""
+    initial_idea: Optional[str] = ""
+
 @router.get("/projects")
 def list_projects(user_id: Optional[str] = None):
     return supabase_service.get_projects(user_id)
@@ -82,6 +88,43 @@ def improve_idea(req: ImproveIdeaRequest):
     if not req.initial_idea or len(req.initial_idea.strip()) < 5:
         raise HTTPException(status_code=400, detail="Initial idea too short")
     result = gemini_service.improve_initial_idea(req.initial_idea, req.problem_statement)
+    return result
+
+@router.post("/projects/{project_id}/extract-requirements")
+def extract_requirements_from_project_docs(project_id: str):
+    project = supabase_service.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Fetch document chunks / contents
+    docs = supabase_service.get_project_documents(project_id)
+    doc_context = ""
+    for d in docs:
+        chunks = supabase_service.get_document_chunks(d["id"])
+        chunk_texts = [f"[{d['filename']} - P.{c.get('page_number', 1)}] {c.get('content', '')}" for c in chunks[:12]]
+        doc_context += "\n\n".join(chunk_texts) + "\n"
+
+    extracted = gemini_service.extract_requirements_from_docs(project, doc_context)
+    return extracted
+
+@router.post("/ai/extract-requirements")
+def extract_requirements(req: ExtractRequirementsRequest):
+    combined_text = req.document_text or ""
+    if req.project_id:
+        docs = supabase_service.get_project_documents(req.project_id)
+        chunks_collected = []
+        for d in docs:
+            chunks = supabase_service.get_document_chunks(d["id"])
+            for c in chunks:
+                chunks_collected.append(f"[{d.get('filename', 'doc')}] {c.get('content', '')}")
+        if chunks_collected:
+            combined_text = "\n\n".join(chunks_collected[:25])
+    
+    result = gemini_service.extract_requirements_from_docs(
+        documents_text=combined_text,
+        problem_statement=req.problem_statement or "",
+        initial_idea=req.initial_idea or ""
+    )
     return result
 
 @router.post("/demo/seed")

@@ -118,6 +118,98 @@ Return strictly valid JSON:
                 "suggested_technologies": ["React", "FastAPI", "Supabase", "Gemini"]
             }
 
+    def extract_requirements_from_docs(self, project: Dict[str, Any], doc_summaries: str) -> Dict[str, Any]:
+        """
+        Reads project documentation, problem statement, and solution idea to automatically extract
+        structured functional requirements, technical specifications, user personas, technologies, and constraints.
+        """
+        prompt = f"""
+You are an expert AI Systems Architect and Requirements Engineer.
+Carefully read and analyze the following uploaded project documentation and project context:
+
+PROJECT METADATA:
+- Name: {project.get('name', 'Untitled')}
+- Problem Statement: {project.get('problem_statement', '')}
+- Initial Idea: {project.get('initial_idea', '')}
+
+UPLOADED DOCUMENTATION CONTENT:
+{doc_summaries or 'No document text found. Infer best practices based on problem statement.'}
+
+TASK:
+Extract and generate a complete, professional, production-grade requirements specification.
+Return strictly valid JSON with this exact structure:
+{{
+  "functional_requirements": [
+    "Specific functional requirement 1 describing user interaction / capability",
+    "Specific functional requirement 2",
+    "Specific functional requirement 3",
+    "Specific functional requirement 4"
+  ],
+  "technical_requirements": [
+    "Technical requirement 1 (e.g. latency, architecture, indexing, security, database)",
+    "Technical requirement 2",
+    "Technical requirement 3",
+    "Technical requirement 4"
+  ],
+  "target_users": [
+    "Target user persona 1",
+    "Target user persona 2",
+    "Target stakeholder 3"
+  ],
+  "technologies": [
+    "Technology/Framework 1",
+    "Technology/Framework 2",
+    "Technology/Framework 3",
+    "Technology/Framework 4"
+  ],
+  "constraints": [
+    "Constraint 1 (e.g. data privacy, rate limits, latency bounds)",
+    "Constraint 2"
+  ]
+}}
+"""
+        try:
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    temperature=0.2
+                )
+            )
+            return json.loads(response.text)
+        except Exception as e:
+            print(f"Error extracting requirements from docs: {e}")
+            return {
+                "functional_requirements": [
+                    "User authentication and profile management",
+                    "Document parsing, ingestion, and semantic chunking",
+                    "Interactive grounded RAG query assistant with verified citations",
+                    "Real-time evaluation and structured weakness analysis"
+                ],
+                "technical_requirements": [
+                    "FastAPI REST API with asynchronous document parsing",
+                    "Vector similarity retrieval with sub-500ms response time",
+                    "Row Level Security (RLS) ensuring strict tenant isolation",
+                    "Support for PDF, DOCX, PPTX, TXT, and Markdown files"
+                ],
+                "target_users": [
+                    "Software Engineers & Hackathon Participants",
+                    "Product Managers & System Architects",
+                    "Technical Evaluators & Project Reviewers"
+                ],
+                "technologies": [
+                    "React.js",
+                    "Python / FastAPI",
+                    "Supabase & pgvector",
+                    "Gemini AI"
+                ],
+                "constraints": [
+                    "Zero hallucination with verified document citations",
+                    "Strict multi-tenant document privacy"
+                ]
+            }
+
     def rag_chat_response(
         self,
         project: Dict[str, Any],

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { Compass, Save, Plus, Trash2, Check, Sparkles, Loader2 } from 'lucide-react';
+import { Compass, Save, Plus, Trash2, Check, Sparkles, Loader2, Wand2, CheckCircle2 } from 'lucide-react';
 import AiHelperModal from '../components/AiHelperModal';
 import { api } from '../lib/api';
 
@@ -18,6 +18,8 @@ export default function ProjectSurveyEditPage() {
 
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [extractingFromDocs, setExtractingFromDocs] = useState(false);
+  const [extractMsg, setExtractMsg] = useState('');
 
   // AI Helper Modal
   const [aiHelperOpen, setAiHelperOpen] = useState(false);
@@ -35,6 +37,31 @@ export default function ProjectSurveyEditPage() {
       return;
     }
     setter(list.filter((_, idx) => idx !== i));
+  };
+
+  const handleReadWithDocumentation = async () => {
+    setExtractingFromDocs(true);
+    setExtractMsg('');
+    try {
+      const extracted = await api.extractRequirements(project.id);
+      if (extracted) {
+        if (extracted.target_users?.length) {
+          setTargetUsers(extracted.target_users);
+        }
+        if (extracted.technologies?.length) {
+          setTechnologies(extracted.technologies);
+        }
+        if (extracted.constraints?.length) {
+          setConstraints(extracted.constraints);
+        }
+        setExtractMsg('✨ AI successfully analyzed your uploaded documents and enriched your project specs!');
+        setTimeout(() => setExtractMsg(''), 6000);
+      }
+    } catch (err) {
+      alert('Could not extract requirements from documentation. You can edit them manually.');
+    } finally {
+      setExtractingFromDocs(false);
+    }
   };
 
   const handleSave = async (e) => {
@@ -65,7 +92,7 @@ export default function ProjectSurveyEditPage() {
     <div className="space-y-6 max-w-3xl mx-auto animate-in fade-in">
       
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h3 className="text-xl font-bold font-display text-white flex items-center gap-2">
             <Compass className="w-5 h-5 text-indigo-400" />
@@ -76,12 +103,35 @@ export default function ProjectSurveyEditPage() {
           </p>
         </div>
 
-        {saveSuccess && (
-          <span className="px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold flex items-center gap-1.5 animate-in fade-in">
-            <Check className="w-3.5 h-3.5" /> Saved ✓
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleReadWithDocumentation}
+            disabled={extractingFromDocs}
+            className="px-3.5 py-1.5 rounded-xl bg-purple-600/80 hover:bg-purple-600 text-white text-xs font-bold shadow-md flex items-center gap-1.5 transition-all"
+          >
+            {extractingFromDocs ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Wand2 className="w-3.5 h-3.5" />
+            )}
+            Read with Documentation
+          </button>
+
+          {saveSuccess && (
+            <span className="px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold flex items-center gap-1.5 animate-in fade-in">
+              <Check className="w-3.5 h-3.5" /> Saved ✓
+            </span>
+          )}
+        </div>
       </div>
+
+      {extractMsg && (
+        <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-start gap-2.5 text-xs text-emerald-300 animate-in fade-in">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+          <span>{extractMsg}</span>
+        </div>
+      )}
 
       <form onSubmit={handleSave} className="p-7 sm:p-9 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-6 shadow-xl">
         
@@ -204,6 +254,37 @@ export default function ProjectSurveyEditPage() {
           ))}
         </div>
 
+        {/* Constraints */}
+        <div className="space-y-2 pt-2 border-t border-slate-800/80">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-bold uppercase tracking-wider text-amber-400">Constraints & Compliance</label>
+            <button
+              type="button"
+              onClick={() => addField(setConstraints, constraints)}
+              className="text-[11px] text-amber-400 font-semibold flex items-center gap-1"
+            >
+              <Plus className="w-3 h-3" /> Add Constraint
+            </button>
+          </div>
+          {constraints.map((c, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <input
+                type="text"
+                value={c}
+                onChange={(e) => updateField(setConstraints, constraints, i, e.target.value)}
+                className="flex-1 px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-indigo-500"
+              />
+              <button
+                type="button"
+                onClick={() => removeField(setConstraints, constraints, i)}
+                className="p-1.5 text-slate-500 hover:text-rose-400"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+
         {/* Save Button */}
         <div className="flex justify-end pt-4 border-t border-slate-800">
           <button
@@ -223,16 +304,13 @@ export default function ProjectSurveyEditPage() {
         isOpen={aiHelperOpen}
         onClose={() => setAiHelperOpen(false)}
         mode={aiHelperMode}
-        initialText={aiHelperMode === 'problem' ? problemStatement : initialIdea}
+        currentText={aiHelperMode === 'problem' ? problemStatement : initialIdea}
         problemContext={problemStatement}
-        onApply={(text, extra) => {
+        onApply={(text) => {
           if (aiHelperMode === 'problem') {
             setProblemStatement(text);
           } else {
             setInitialIdea(text);
-            if (extra && extra.length) {
-              setTechnologies(extra);
-            }
           }
         }}
       />

@@ -1,0 +1,34 @@
+# Environment Variables & Secrets
+.env
+.env.*
+!.env.example
+backend/.env
+frontend/.env
+*.env
+
+# Dependencies
+node_modules/
+backend/venv/
+.venv/
+env/
+ENV/
+
+# Build & Bundles
+dist/
+build/
+*.egg-info/
+
+# Python Cache & Databases
+__pycache__/
+*.py[cod]
+*$py.class
+*.db
+*.sqlite3
+backend/data/
+
+# IDE & OS Files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log

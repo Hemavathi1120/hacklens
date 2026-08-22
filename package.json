@@ -1,0 +1,23 @@
+{
+  "name": "projectlens-ai",
+  "version": "1.0.0",
+  "description": "PROJECTLENS AI - AI Project Evaluation & RAG Assistant",
+  "type": "module",
+  "main": "start.js",
+  "scripts": {
+    "start": "node start.js",
+    "dev": "node start.js",
+    "build": "cd frontend && npm run build"
+  },
+  "keywords": [
+    "ai",
+    "rag",
+    "evaluation",
+    "gemini",
+    "supabase",
+    "react",
+    "fastapi"
+  ],
+  "author": "Google Deepmind / ProjectLens",
+  "license": "MIT"
+}

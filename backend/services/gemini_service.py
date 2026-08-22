@@ -118,22 +118,35 @@ Return strictly valid JSON:
                 "suggested_technologies": ["React", "FastAPI", "Supabase", "Gemini"]
             }
 
-    def extract_requirements_from_docs(self, project: Dict[str, Any], doc_summaries: str) -> Dict[str, Any]:
+    def extract_requirements_from_docs(
+        self,
+        project: Optional[Dict[str, Any]] = None,
+        doc_summaries: str = "",
+        documents_text: str = "",
+        problem_statement: str = "",
+        initial_idea: str = ""
+    ) -> Dict[str, Any]:
         """
         Reads project documentation, problem statement, and solution idea to automatically extract
         structured functional requirements, technical specifications, user personas, technologies, and constraints.
         """
+        proj = project or {}
+        proj_name = proj.get("name", "Project")
+        prob_text = problem_statement or proj.get("problem_statement", "")
+        idea_text = initial_idea or proj.get("initial_idea", "")
+        docs_content = documents_text or doc_summaries or ""
+
         prompt = f"""
 You are an expert AI Systems Architect and Requirements Engineer.
 Carefully read and analyze the following uploaded project documentation and project context:
 
 PROJECT METADATA:
-- Name: {project.get('name', 'Untitled')}
-- Problem Statement: {project.get('problem_statement', '')}
-- Initial Idea: {project.get('initial_idea', '')}
+- Name: {proj_name}
+- Problem Statement: {prob_text}
+- Initial Idea: {idea_text}
 
 UPLOADED DOCUMENTATION CONTENT:
-{doc_summaries or 'No document text found. Infer best practices based on problem statement.'}
+{docs_content or 'No document text found. Infer best practices based on problem statement.'}
 
 TASK:
 Extract and generate a complete, professional, production-grade requirements specification.

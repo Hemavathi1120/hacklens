@@ -46,14 +46,14 @@ st.markdown("""
     }
     
     .metric-value {
-        font-size: 2rem;
+        font-size: 1.8rem;
         font-weight: 900;
         color: #ef4444;
         font-family: monospace;
     }
     
     .metric-label {
-        font-size: 0.8rem;
+        font-size: 0.75rem;
         font-weight: 700;
         text-transform: uppercase;
         color: #a1a1aa;
@@ -100,17 +100,18 @@ try:
 except Exception:
     pass
 
-# Import backend services
+# Import core backend services
 try:
     from backend.services.supabase_service import supabase_service
     from backend.services.gemini_service import gemini_service
-    from backend.services.rag_service import rag_service
-    from backend.services.evaluation_service import evaluation_service
+    from backend.services.rag_pipeline import rag_pipeline
+    from backend.services.rag_database import rag_database
+    from backend.services.document_parser import DocumentParser
     from backend.routers.projects import seed_demo_project
     BACKEND_READY = True
 except Exception as e:
     BACKEND_READY = False
-    st.error(f"Initialization Note: {e}")
+    st.error(f"Backend Service Note: {e}")
 
 # Pre-seed demo project if needed
 if BACKEND_READY:
@@ -121,7 +122,7 @@ if BACKEND_READY:
     except Exception:
         pass
 
-# Sidebar
+# Sidebar Branding
 st.sidebar.markdown("""
 <div style="text-align: center; padding: 1rem 0;">
     <h2 style="font-weight: 900; margin: 0; color: #ef4444;">⚡ HACKLENS AI</h2>
@@ -144,7 +145,10 @@ menu = st.sidebar.radio(
 # Project Selector
 projects = []
 if BACKEND_READY:
-    projects = supabase_service.get_projects() or []
+    try:
+        projects = supabase_service.get_projects() or []
+    except Exception:
+        projects = []
 
 if not projects and BACKEND_READY:
     try:
@@ -153,7 +157,7 @@ if not projects and BACKEND_READY:
     except Exception:
         pass
 
-project_names = {p["id"]: p["name"] for p in projects}
+project_names = {p["id"]: p.get("name", "Untitled") for p in projects}
 selected_project_id = None
 
 if projects:
@@ -192,10 +196,10 @@ if menu == "📊 Dashboard & Evaluation Radar":
     if current_project:
         col1, col2, col3, col4 = st.columns(4)
         
-        evals = supabase_service.get_evaluations(selected_project_id)
+        evals = supabase_service.get_project_evaluations(selected_project_id)
         latest_eval = evals[0] if evals else None
         
-        score = latest_eval.get("overall_score", current_project.get("overall_score", 88.5)) if latest_eval else 88.5
+        score = latest_eval.get("overall_score", current_project.get("overall_score", 88.5)) if latest_eval else current_project.get("overall_score", 88.5)
         status = latest_eval.get("status_label", "Strong Concept") if latest_eval else "Strong Concept"
         
         with col1:
@@ -215,7 +219,7 @@ if menu == "📊 Dashboard & Evaluation Radar":
             """, unsafe_allow_html=True)
             
         with col3:
-            docs = supabase_service.get_documents(selected_project_id)
+            docs = supabase_service.get_project_documents(selected_project_id)
             st.markdown(f"""
             <div class="metric-card">
                 <div class="metric-label">Indexed Documents</div>
@@ -289,8 +293,12 @@ if menu == "📊 Dashboard & Evaluation Radar":
             if st.button("⚡ Re-Run Gemini 2.5 Evaluation"):
                 with st.spinner("Analyzing project across 12 dimensions..."):
                     try:
-                        res = evaluation_service.run_evaluation(selected_project_id)
-                        st.success(f"Evaluation complete! Overall Score: {res.get('overall_score')}/100")
+                        docs = supabase_service.get_project_documents(selected_project_id)
+                        doc_summaries = "\n".join([f"- Document: {d['filename']}. Summary: {d.get('summary', 'Indexed document.')}" for d in docs])
+                        eval_res = gemini_service.evaluate_project(current_project, doc_summaries=doc_summaries)
+                        eval_res["project_id"] = selected_project_id
+                        supabase_service.save_evaluation(eval_res)
+                        st.success(f"Evaluation complete! Overall Score: {eval_res.get('overall_score', 88)}/100")
                         st.rerun()
                     except Exception as err:
                         st.error(f"Evaluation failed: {err}")
@@ -327,18 +335,16 @@ elif menu == "💬 Grounded RAG Assistant":
                         st.caption(f"_{c.get('snippet', '')[:180]}..._")
 
         # Chat Input
-        query = st.chat_input("Ask anything about the architecture, security, or scheme guidelines...")
+        query = st.chat_input("Ask anything about the architecture, security, or statutory guidelines...")
         if query:
-            # User message
             st.session_state.chat_history.append({"role": "user", "content": query})
             with st.chat_message("user"):
                 st.markdown(query)
 
-            # AI message
             with st.chat_message("assistant"):
                 with st.spinner("Searching knowledge base & synthesizing grounded response..."):
                     try:
-                        response_data = rag_service.query_rag(
+                        response_data = rag_pipeline.generate_response(
                             project_id=selected_project_id,
                             query=query,
                             session_id=None
@@ -382,7 +388,13 @@ elif menu == "📋 AI Kanban Roadmap":
             if st.button("🔄 Sync AI Board"):
                 with st.spinner("Synthesizing evaluation tasks..."):
                     try:
-                        supabase_service.sync_board_from_evaluation(selected_project_id)
+                        evals = supabase_service.get_project_evaluations(selected_project_id)
+                        eval_data = evals[0] if evals else {}
+                        cards = gemini_service.generate_ai_board_cards(current_project, eval_data)
+                        for c in cards:
+                            c["project_id"] = selected_project_id
+                            c["user_id"] = "demo-user"
+                            supabase_service.save_board_item(c)
                         st.success("Board synced!")
                         st.rerun()
                     except Exception as err:
@@ -434,11 +446,19 @@ elif menu == "📁 Ingest Project Documentation":
                     try:
                         for uf in uploaded_files:
                             content = uf.read()
-                            supabase_service.save_document(
+                            parsed = DocumentParser.extract_text(content, uf.name, uf.type or "application/pdf")
+                            doc_id = supabase_service.save_document(
                                 project_id=selected_project_id,
                                 filename=uf.name,
                                 file_bytes=content,
-                                file_type=uf.type or "application/pdf"
+                                file_type=uf.type or "application/pdf",
+                                summary=f"Parsed {len(parsed.get('pages', []))} sections from {uf.name}."
+                            )
+                            rag_database.index_document(
+                                project_id=selected_project_id,
+                                document_id=doc_id,
+                                filename=uf.name,
+                                pages=parsed.get("pages", [])
                             )
                         st.success("Documents successfully ingested and indexed into RAG store!")
                         st.rerun()
@@ -446,7 +466,7 @@ elif menu == "📁 Ingest Project Documentation":
                         st.error(f"Ingestion failed: {err}")
 
         st.subheader("📚 Currently Indexed Documents")
-        docs = supabase_service.get_documents(selected_project_id)
+        docs = supabase_service.get_project_documents(selected_project_id)
         if docs:
             for d in docs:
                 st.markdown(f"📄 **{d.get('filename')}** — `{d.get('file_size', 'N/A')}` bytes | Status: `Indexed ✓`")
@@ -506,12 +526,25 @@ elif menu == "⚖️ Hackathon Judge Critique":
         if st.button("👨‍⚖️ Generate Autonomous Judge Critique"):
             with st.spinner("Synthesizing jury scorecard and adversarial critique..."):
                 try:
-                    critique = evaluation_service.judge_project(selected_project_id)
+                    evals = supabase_service.get_project_evaluations(selected_project_id)
+                    eval_data = evals[0] if evals else {}
+                    critique = gemini_service.critique_as_judge(current_project, eval_data=eval_data)
+                    
                     st.markdown("### 🏆 Jury Scorecard & Verdict")
                     st.markdown(f"**Score:** `{critique.get('judge_score', 88)}/100`")
                     st.markdown(f"**Verdict:** {critique.get('verdict', 'Strong Submission')}")
                     st.markdown("---")
-                    st.markdown(critique.get("detailed_critique", "Critique synthesized."))
+                    
+                    if critique.get("potential_questions"):
+                        st.markdown("**Potential Jury Questions:**")
+                        for q in critique["potential_questions"]:
+                            st.markdown(f"- ❓ {q}")
+                    
+                    if critique.get("presentation_tips"):
+                        st.markdown("**Presentation & Pitch Tips:**")
+                        for tip in critique["presentation_tips"]:
+                            st.markdown(f"- 💡 {tip}")
+                            
                 except Exception as err:
                     st.error(f"Judge mode failed: {err}")
     else:

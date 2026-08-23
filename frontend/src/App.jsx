@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 // Pages
 import LandingPage from './pages/LandingPage';
 import AuthPage from './pages/AuthPage';
+import AuthCallback from './pages/AuthCallback';
 import DashboardPage from './pages/DashboardPage';
 import ProjectsListPage from './pages/ProjectsListPage';
 import ProjectWizardPage from './pages/ProjectWizardPage';
@@ -24,8 +25,8 @@ function ProtectedRoute({ children }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#090d16] flex items-center justify-center">
-        <div className="w-8 h-8 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
+      <div className="min-h-screen bg-[#09090b] flex items-center justify-center">
+        <div className="w-8 h-8 rounded-full border-2 border-red-500 border-t-transparent animate-spin" />
       </div>
     );
   }
@@ -45,6 +46,8 @@ export default function App() {
           {/* Public Routes */}
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<AuthPage />} />
+          <Route path="/auth" element={<AuthPage />} />
+          <Route path="/auth/callback" element={<AuthCallback />} />
 
           {/* Protected Routes */}
           <Route

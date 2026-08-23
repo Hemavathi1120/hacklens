@@ -22,6 +22,7 @@ import {
 import Navbar from '../components/Navbar';
 import UploadZone from '../components/UploadZone';
 import AiHelperModal from '../components/AiHelperModal';
+import GLSLHills from '../components/ui/glsl-hills';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/api';
 
@@ -216,13 +217,25 @@ export default function ProjectWizardPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#090d16] text-slate-100 flex flex-col">
+    <div className="min-h-screen bg-[#09090b] text-zinc-100 flex flex-col cockpit-grid relative selection:bg-red-500/30 selection:text-red-300">
+      
+      {/* Background Procedural GLSL Terrain */}
+      <div className="fixed inset-0 pointer-events-none z-0 opacity-15">
+        <GLSLHills speed={0.35} />
+      </div>
+
+      {/* Floating Animated Red VFX Gradient Orbs */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+        <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-gradient-to-tr from-red-600/15 to-rose-600/10 blur-3xl animate-float-slow" />
+        <div className="absolute top-1/3 -right-32 w-[32rem] h-[32rem] rounded-full bg-gradient-to-bl from-rose-600/15 via-red-600/10 to-transparent blur-3xl animate-float-reverse" />
+      </div>
+
       <Navbar />
 
-      <main className="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-6 py-8 space-y-8">
+      <main className="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-6 py-8 space-y-8 z-10 animate-in fade-in">
         
         {/* Step Indicator */}
-        <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 flex items-center justify-between overflow-x-auto gap-3">
+        <div className="p-4 rounded-3xl bg-zinc-900/90 border border-zinc-800 flex items-center justify-between overflow-x-auto gap-3 shadow-md">
           {steps.map((s) => {
             const isCompleted = s.num < currentStep;
             const isCurrent = s.num === currentStep;
@@ -230,25 +243,25 @@ export default function ProjectWizardPage() {
             return (
               <div key={s.num} className="flex items-center gap-2 flex-shrink-0">
                 <div
-                  className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold transition-all ${
+                  className={`w-7 h-7 rounded-xl flex items-center justify-center text-xs font-bold transition-all ${
                     isCompleted
-                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                      ? 'bg-red-950 text-red-400 border border-red-500/40'
                       : isCurrent
-                      ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
-                      : 'bg-slate-800 text-slate-500 border border-slate-700'
+                      ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-lg shadow-red-600/30'
+                      : 'bg-zinc-800 text-zinc-500 border border-zinc-700'
                   }`}
                 >
                   {isCompleted ? <Check className="w-3.5 h-3.5" /> : s.num}
                 </div>
                 <span
-                  className={`text-xs font-semibold uppercase tracking-wider ${
-                    isCurrent ? 'text-white' : isCompleted ? 'text-emerald-400' : 'text-slate-500'
+                  className={`text-xs font-semibold uppercase tracking-wider font-mono ${
+                    isCurrent ? 'text-white' : isCompleted ? 'text-red-400' : 'text-zinc-500'
                   }`}
                 >
                   {s.label}
                 </span>
                 {s.num < steps.length && (
-                  <div className="w-6 sm:w-12 h-px bg-slate-800 mx-1" />
+                  <div className="w-6 sm:w-12 h-px bg-zinc-800 mx-1" />
                 )}
               </div>
             );
@@ -257,48 +270,48 @@ export default function ProjectWizardPage() {
 
         {/* STEP 1: PROBLEM STATEMENT */}
         {currentStep === 1 && (
-          <div className="p-7 sm:p-9 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-6 shadow-xl animate-in fade-in">
+          <div className="p-7 sm:p-9 rounded-3xl bg-zinc-900/90 border border-zinc-800 space-y-6 shadow-xl animate-in fade-in">
             <div className="space-y-1">
-              <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider">Step 01</span>
-              <h2 className="text-xl font-bold font-display text-white">Define the Problem Statement</h2>
-              <p className="text-xs text-slate-400">
+              <span className="text-xs font-bold text-red-400 uppercase tracking-wider font-mono">Step 01</span>
+              <h2 className="text-xl font-bold font-display text-zinc-100">Define the Problem Statement</h2>
+              <p className="text-xs text-zinc-400 font-normal">
                 Specify who faces this challenge and why current alternatives fail.
               </p>
             </div>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Project Name *</label>
+                <label className="block text-xs font-semibold text-zinc-300 mb-1">Project Name *</label>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. CivicLens AI"
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  className="w-full px-4 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-red-500 focus:bg-black"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Brief Description (Optional)</label>
+                <label className="block text-xs font-semibold text-zinc-300 mb-1">Brief Description (Optional)</label>
                 <input
                   type="text"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="e.g. AI-powered municipal intelligence and legal citation assistant."
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  className="w-full px-4 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-red-500 focus:bg-black"
                 />
               </div>
 
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-semibold text-slate-300">Problem Statement *</label>
+                  <label className="text-xs font-semibold text-zinc-300">Problem Statement *</label>
                   <button
                     type="button"
                     onClick={() => {
                       setAiHelperMode('problem');
                       setAiHelperOpen(true);
                     }}
-                    className="inline-flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 font-semibold"
+                    className="inline-flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 font-semibold"
                   >
                     <Sparkles className="w-3.5 h-3.5" /> Need help defining the problem?
                   </button>
@@ -308,9 +321,9 @@ export default function ProjectWizardPage() {
                   value={problemStatement}
                   onChange={(e) => setProblemStatement(e.target.value)}
                   placeholder="Describe the exact pain point, affected user group, current manual workarounds, and why this problem is urgent..."
-                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 leading-relaxed"
+                  className="w-full px-4 py-3 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-red-500 focus:bg-black leading-relaxed"
                 />
-                <div className="flex justify-between text-[11px] text-slate-500 mt-1">
+                <div className="flex justify-between text-[11px] text-zinc-500 mt-1 font-mono">
                   <span>Aim for specific, measurable pain points.</span>
                   <span>{problemStatement.length} characters</span>
                 </div>
@@ -320,7 +333,7 @@ export default function ProjectWizardPage() {
             <div className="flex justify-end pt-4">
               <button
                 onClick={handleNextStep}
-                className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-2 shadow-lg shadow-indigo-600/30 transition-all"
+                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white text-xs font-semibold flex items-center gap-2 shadow-lg shadow-red-600/30 transition-all border border-red-500/30"
               >
                 Next: Solution Idea <ArrowRight className="w-4 h-4" />
               </button>
@@ -330,11 +343,11 @@ export default function ProjectWizardPage() {
 
         {/* STEP 2: INITIAL SOLUTION IDEA */}
         {currentStep === 2 && (
-          <div className="p-7 sm:p-9 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-6 shadow-xl animate-in fade-in">
+          <div className="p-7 sm:p-9 rounded-3xl bg-zinc-900/90 border border-zinc-800 space-y-6 shadow-xl animate-in fade-in">
             <div className="space-y-1">
-              <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider">Step 02</span>
-              <h2 className="text-xl font-bold font-display text-white">Your Initial Solution Idea</h2>
-              <p className="text-xs text-slate-400">
+              <span className="text-xs font-bold text-red-400 uppercase tracking-wider font-mono">Step 02</span>
+              <h2 className="text-xl font-bold font-display text-zinc-100">Your Initial Solution Idea</h2>
+              <p className="text-xs text-zinc-400 font-normal">
                 Outline how your application intends to solve the core problem.
               </p>
             </div>
@@ -342,14 +355,14 @@ export default function ProjectWizardPage() {
             <div className="space-y-4">
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-semibold text-slate-300">Solution Concept *</label>
+                  <label className="text-xs font-semibold text-zinc-300">Solution Concept *</label>
                   <button
                     type="button"
                     onClick={() => {
                       setAiHelperMode('idea');
                       setAiHelperOpen(true);
                     }}
-                    className="inline-flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 font-semibold"
+                    className="inline-flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 font-semibold"
                   >
                     <Sparkles className="w-3.5 h-3.5" /> Improve my idea
                   </button>
@@ -359,9 +372,9 @@ export default function ProjectWizardPage() {
                   value={initialIdea}
                   onChange={(e) => setInitialIdea(e.target.value)}
                   placeholder="Describe your core architecture, AI model integration, user experience, and key differentiators..."
-                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 leading-relaxed"
+                  className="w-full px-4 py-3 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-red-500 focus:bg-black leading-relaxed"
                 />
-                <div className="flex justify-between text-[11px] text-slate-500 mt-1">
+                <div className="flex justify-between text-[11px] text-zinc-500 mt-1 font-mono">
                   <span>Highlight your technical differentiators and user workflow.</span>
                   <span>{initialIdea.length} characters</span>
                 </div>
@@ -371,7 +384,7 @@ export default function ProjectWizardPage() {
             <div className="flex justify-between items-center pt-4">
               <button
                 onClick={() => setCurrentStep(1)}
-                className="px-5 py-2.5 rounded-xl border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 text-xs font-semibold flex items-center gap-2 transition-all"
+                className="px-5 py-2.5 rounded-xl border border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-800 text-xs font-semibold flex items-center gap-2 transition-all shadow-xs"
               >
                 <ArrowLeft className="w-4 h-4" /> Back
               </button>
@@ -379,7 +392,7 @@ export default function ProjectWizardPage() {
               <button
                 onClick={handleNextStep}
                 disabled={loading}
-                className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-2 shadow-lg shadow-indigo-600/30 transition-all"
+                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white text-xs font-semibold flex items-center gap-2 shadow-lg shadow-red-600/30 transition-all border border-red-500/30"
               >
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <>Next: Upload Documents <ArrowRight className="w-4 h-4" /></>}
               </button>
@@ -387,23 +400,23 @@ export default function ProjectWizardPage() {
           </div>
         )}
 
-        {/* STEP 3: UPLOAD DOCUMENTATION (Swapped to Step 03) */}
+        {/* STEP 3: UPLOAD DOCUMENTATION */}
         {currentStep === 3 && (
-          <div className="p-7 sm:p-9 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-6 shadow-xl animate-in fade-in">
+          <div className="p-7 sm:p-9 rounded-3xl bg-zinc-900/90 border border-zinc-800 space-y-6 shadow-xl animate-in fade-in">
             <div className="space-y-1">
-              <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider">Step 03</span>
-              <h2 className="text-xl font-bold font-display text-white">Upload Project Documentation</h2>
-              <p className="text-xs text-slate-400">
+              <span className="text-xs font-bold text-red-400 uppercase tracking-wider font-mono">Step 03</span>
+              <h2 className="text-xl font-bold font-display text-zinc-100">Upload Project Documentation</h2>
+              <p className="text-xs text-zinc-400 font-normal">
                 Upload your slides, whitepapers, design docs, or requirements files (PDF, PPT, PPTX, DOC, DOCX, TXT, MD). 
                 The AI will read these files to auto-fill your requirements and build a private RAG knowledge base.
               </p>
             </div>
 
-            <div className="p-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-xs text-indigo-300 flex items-start gap-3">
-              <Sparkles className="w-5 h-5 text-indigo-400 flex-shrink-0 mt-0.5" />
+            <div className="p-4 rounded-2xl bg-red-950/40 border border-red-500/30 text-xs text-red-300 flex items-start gap-3">
+              <Sparkles className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
               <div>
-                <p className="font-semibold text-indigo-200">Smart Document Ingestion</p>
-                <p className="text-[11px] text-indigo-300/80 mt-0.5">
+                <p className="font-semibold text-zinc-100">Smart Document Ingestion</p>
+                <p className="text-[11px] text-zinc-400 mt-0.5 font-normal">
                   In the next step, you can click <strong>"Read with Documentation"</strong> to let the AI automatically extract functional specs, tech stack, and user personas from your uploaded files!
                 </p>
               </div>
@@ -421,14 +434,14 @@ export default function ProjectWizardPage() {
             <div className="flex justify-between items-center pt-4">
               <button
                 onClick={() => setCurrentStep(2)}
-                className="px-5 py-2.5 rounded-xl border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 text-xs font-semibold flex items-center gap-2 transition-all"
+                className="px-5 py-2.5 rounded-xl border border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-800 text-xs font-semibold flex items-center gap-2 transition-all shadow-xs"
               >
                 <ArrowLeft className="w-4 h-4" /> Back
               </button>
 
               <button
                 onClick={handleNextStep}
-                className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-2 shadow-lg shadow-indigo-600/30 transition-all"
+                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white text-xs font-semibold flex items-center gap-2 shadow-lg shadow-red-600/30 transition-all border border-red-500/30"
               >
                 Next: Define Requirements <ArrowRight className="w-4 h-4" />
               </button>
@@ -436,15 +449,15 @@ export default function ProjectWizardPage() {
           </div>
         )}
 
-        {/* STEP 4: PROJECT REQUIREMENTS (Manual + Read with Documentation) */}
+        {/* STEP 4: PROJECT REQUIREMENTS */}
         {currentStep === 4 && (
-          <div className="p-7 sm:p-9 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-6 shadow-xl animate-in fade-in">
+          <div className="p-7 sm:p-9 rounded-3xl bg-zinc-900/90 border border-zinc-800 space-y-6 shadow-xl animate-in fade-in">
             
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="space-y-1">
-                <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider">Step 04</span>
-                <h2 className="text-xl font-bold font-display text-white">Project Requirements & Specifications</h2>
-                <p className="text-xs text-slate-400">
+                <span className="text-xs font-bold text-red-400 uppercase tracking-wider font-mono">Step 04</span>
+                <h2 className="text-xl font-bold font-display text-zinc-100">Project Requirements & Specifications</h2>
+                <p className="text-xs text-zinc-400 font-normal">
                   Fill manually, or click below to let AI extract requirements directly from your uploaded documentation.
                 </p>
               </div>
@@ -454,7 +467,7 @@ export default function ProjectWizardPage() {
                 type="button"
                 onClick={handleReadWithDocumentation}
                 disabled={extractingFromDocs}
-                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-50 text-white text-xs font-bold shadow-lg shadow-indigo-600/25 flex items-center gap-2 transition-all hover:scale-[1.02] flex-shrink-0"
+                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 disabled:opacity-50 text-white text-xs font-bold shadow-lg shadow-red-600/25 flex items-center gap-2 transition-all hover:scale-[1.02] flex-shrink-0 border border-red-500/30"
               >
                 {extractingFromDocs ? (
                   <>
@@ -469,8 +482,8 @@ export default function ProjectWizardPage() {
             </div>
 
             {autoFillSuccessMsg && (
-              <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-start gap-2.5 text-xs text-emerald-300 animate-in fade-in">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+              <div className="p-3.5 rounded-xl bg-red-950/40 border border-red-500/30 flex items-start gap-2.5 text-xs text-red-300 animate-in fade-in">
+                <CheckCircle2 className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
                 <span>{autoFillSuccessMsg}</span>
               </div>
             )}
@@ -480,11 +493,11 @@ export default function ProjectWizardPage() {
               {/* 1. Functional Requirements */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-slate-300">Functional Requirements</label>
+                  <label className="text-xs font-semibold text-zinc-300">Functional Requirements</label>
                   <button
                     type="button"
                     onClick={() => addListField(setFunctionalReqs, functionalReqs)}
-                    className="text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1"
+                    className="text-[11px] text-red-400 hover:text-red-300 font-semibold flex items-center gap-1"
                   >
                     <Plus className="w-3.5 h-3.5" /> Add Requirement
                   </button>
@@ -496,12 +509,12 @@ export default function ProjectWizardPage() {
                       value={req}
                       onChange={(e) => updateListField(setFunctionalReqs, functionalReqs, idx, e.target.value)}
                       placeholder={`e.g. System allows natural language statutory search with source citations...`}
-                      className="flex-1 px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                      className="flex-1 px-3.5 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-red-500"
                     />
                     <button
                       type="button"
                       onClick={() => removeListField(setFunctionalReqs, functionalReqs, idx)}
-                      className="p-2 text-slate-500 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors"
+                      className="p-2 text-zinc-500 hover:text-rose-400 hover:bg-zinc-800 rounded-lg transition-colors"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -512,11 +525,11 @@ export default function ProjectWizardPage() {
               {/* 2. Technical Requirements */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-slate-300">Technical Requirements & Architecture</label>
+                  <label className="text-xs font-semibold text-zinc-300">Technical Requirements & Architecture</label>
                   <button
                     type="button"
                     onClick={() => addListField(setTechnicalReqs, technicalReqs)}
-                    className="text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1"
+                    className="text-[11px] text-red-400 hover:text-red-300 font-semibold flex items-center gap-1"
                   >
                     <Plus className="w-3.5 h-3.5" /> Add Tech Spec
                   </button>
@@ -528,12 +541,12 @@ export default function ProjectWizardPage() {
                       value={req}
                       onChange={(e) => updateListField(setTechnicalReqs, technicalReqs, idx, e.target.value)}
                       placeholder={`e.g. Sub-500ms vector search response time with pgvector...`}
-                      className="flex-1 px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                      className="flex-1 px-3.5 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-red-500"
                     />
                     <button
                       type="button"
                       onClick={() => removeListField(setTechnicalReqs, technicalReqs, idx)}
-                      className="p-2 text-slate-500 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors"
+                      className="p-2 text-zinc-500 hover:text-rose-400 hover:bg-zinc-800 rounded-lg transition-colors"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -544,11 +557,11 @@ export default function ProjectWizardPage() {
               {/* 3. Target Users */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-slate-300">Target User Personas</label>
+                  <label className="text-xs font-semibold text-zinc-300">Target User Personas</label>
                   <button
                     type="button"
                     onClick={() => addListField(setTargetUsers, targetUsers)}
-                    className="text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1"
+                    className="text-[11px] text-red-400 hover:text-red-300 font-semibold flex items-center gap-1"
                   >
                     <Plus className="w-3.5 h-3.5" /> Add Persona
                   </button>
@@ -561,12 +574,12 @@ export default function ProjectWizardPage() {
                         value={user}
                         onChange={(e) => updateListField(setTargetUsers, targetUsers, idx, e.target.value)}
                         placeholder="e.g. Legal Researchers / Citizens"
-                        className="flex-1 px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                        className="flex-1 px-3.5 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-red-500"
                       />
                       <button
                         type="button"
                         onClick={() => removeListField(setTargetUsers, targetUsers, idx)}
-                        className="p-2 text-slate-500 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors"
+                        className="p-2 text-zinc-500 hover:text-rose-400 hover:bg-zinc-800 rounded-lg transition-colors"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -578,11 +591,11 @@ export default function ProjectWizardPage() {
               {/* 4. Technologies */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-slate-300">Technologies & Frameworks</label>
+                  <label className="text-xs font-semibold text-zinc-300">Technologies & Frameworks</label>
                   <button
                     type="button"
                     onClick={() => addListField(setTechnologies, technologies)}
-                    className="text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1"
+                    className="text-[11px] text-red-400 hover:text-red-300 font-semibold flex items-center gap-1"
                   >
                     <Plus className="w-3.5 h-3.5" /> Add Technology
                   </button>
@@ -595,12 +608,12 @@ export default function ProjectWizardPage() {
                         value={tech}
                         onChange={(e) => updateListField(setTechnologies, technologies, idx, e.target.value)}
                         placeholder="e.g. React, Python, Supabase, Gemini"
-                        className="flex-1 px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                        className="flex-1 px-3.5 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-red-500"
                       />
                       <button
                         type="button"
                         onClick={() => removeListField(setTechnologies, technologies, idx)}
-                        className="p-2 text-slate-500 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors"
+                        className="p-2 text-zinc-500 hover:text-rose-400 hover:bg-zinc-800 rounded-lg transition-colors"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -612,11 +625,11 @@ export default function ProjectWizardPage() {
               {/* 5. Constraints */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-slate-300">Constraints & Compliance</label>
+                  <label className="text-xs font-semibold text-zinc-300">Constraints & Compliance</label>
                   <button
                     type="button"
                     onClick={() => addListField(setConstraints, constraints)}
-                    className="text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1"
+                    className="text-[11px] text-red-400 hover:text-red-300 font-semibold flex items-center gap-1"
                   >
                     <Plus className="w-3.5 h-3.5" /> Add Constraint
                   </button>
@@ -629,12 +642,12 @@ export default function ProjectWizardPage() {
                         value={c}
                         onChange={(e) => updateListField(setConstraints, constraints, idx, e.target.value)}
                         placeholder="e.g. Strict tenant privacy, Zero hallucination"
-                        className="flex-1 px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                        className="flex-1 px-3.5 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-red-500"
                       />
                       <button
                         type="button"
                         onClick={() => removeListField(setConstraints, constraints, idx)}
-                        className="p-2 text-slate-500 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors"
+                        className="p-2 text-zinc-500 hover:text-rose-400 hover:bg-zinc-800 rounded-lg transition-colors"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -648,7 +661,7 @@ export default function ProjectWizardPage() {
             <div className="flex justify-between items-center pt-4">
               <button
                 onClick={() => setCurrentStep(3)}
-                className="px-5 py-2.5 rounded-xl border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 text-xs font-semibold flex items-center gap-2 transition-all"
+                className="px-5 py-2.5 rounded-xl border border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-800 text-xs font-semibold flex items-center gap-2 transition-all shadow-xs"
               >
                 <ArrowLeft className="w-4 h-4" /> Back to Documents
               </button>
@@ -656,7 +669,7 @@ export default function ProjectWizardPage() {
               <button
                 onClick={handleNextStep}
                 disabled={loading}
-                className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-2 shadow-lg shadow-indigo-600/30 transition-all"
+                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white text-xs font-semibold flex items-center gap-2 shadow-lg shadow-red-600/30 transition-all border border-red-500/30"
               >
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <>Review & Launch AI Analysis <ArrowRight className="w-4 h-4" /></>}
               </button>
@@ -666,40 +679,40 @@ export default function ProjectWizardPage() {
 
         {/* STEP 5: REVIEW & LAUNCH AI ANALYSIS */}
         {currentStep === 5 && (
-          <div className="p-7 sm:p-9 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-6 shadow-xl animate-in fade-in">
+          <div className="p-7 sm:p-9 rounded-3xl bg-zinc-900/90 border border-zinc-800 space-y-6 shadow-xl animate-in fade-in">
             <div className="space-y-1">
-              <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider">Step 05</span>
-              <h2 className="text-xl font-bold font-display text-white">Review & Launch AI Evaluation</h2>
-              <p className="text-xs text-slate-400">
+              <span className="text-xs font-bold text-red-400 uppercase tracking-wider font-mono">Step 05</span>
+              <h2 className="text-xl font-bold font-display text-zinc-100">Review & Launch AI Evaluation</h2>
+              <p className="text-xs text-zinc-400 font-normal">
                 Confirm your project definition and trigger the 12-dimensional evaluation matrix.
               </p>
             </div>
 
             <div className="space-y-4 text-xs">
-              <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800/80 space-y-1">
-                <span className="text-slate-400 font-semibold uppercase text-[10px]">Project Name</span>
-                <p className="font-bold text-white text-sm">{name}</p>
+              <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800 space-y-1">
+                <span className="text-zinc-500 font-semibold uppercase text-[10px] font-mono">Project Name</span>
+                <p className="font-bold text-zinc-100 text-sm">{name}</p>
               </div>
 
-              <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800/80 space-y-1">
-                <span className="text-slate-400 font-semibold uppercase text-[10px]">Problem Statement</span>
-                <p className="text-slate-200 leading-relaxed">{problemStatement}</p>
+              <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800 space-y-1">
+                <span className="text-zinc-500 font-semibold uppercase text-[10px] font-mono">Problem Statement</span>
+                <p className="text-zinc-300 leading-relaxed font-normal">{problemStatement}</p>
               </div>
 
-              <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800/80 space-y-1">
-                <span className="text-slate-400 font-semibold uppercase text-[10px]">Solution Idea</span>
-                <p className="text-slate-200 leading-relaxed">{initialIdea}</p>
+              <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800 space-y-1">
+                <span className="text-zinc-500 font-semibold uppercase text-[10px] font-mono">Solution Idea</span>
+                <p className="text-zinc-300 leading-relaxed font-normal">{initialIdea}</p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800/80 space-y-1">
-                  <span className="text-slate-400 font-semibold uppercase text-[10px]">Functional Requirements</span>
-                  <p className="text-slate-200 font-semibold">{functionalReqs.filter(r => r.trim()).length} requirements defined</p>
+                <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800 space-y-1">
+                  <span className="text-zinc-500 font-semibold uppercase text-[10px] font-mono">Functional Requirements</span>
+                  <p className="text-zinc-200 font-semibold">{functionalReqs.filter(r => r.trim()).length} requirements defined</p>
                 </div>
 
-                <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800/80 space-y-1">
-                  <span className="text-slate-400 font-semibold uppercase text-[10px]">Technical Specs</span>
-                  <p className="text-slate-200 font-semibold">{technicalReqs.filter(r => r.trim()).length} specs defined</p>
+                <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800 space-y-1">
+                  <span className="text-zinc-500 font-semibold uppercase text-[10px] font-mono">Technical Specs</span>
+                  <p className="text-zinc-200 font-semibold">{technicalReqs.filter(r => r.trim()).length} specs defined</p>
                 </div>
               </div>
             </div>
@@ -707,7 +720,7 @@ export default function ProjectWizardPage() {
             <div className="flex justify-between items-center pt-4">
               <button
                 onClick={() => setCurrentStep(4)}
-                className="px-5 py-2.5 rounded-xl border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 text-xs font-semibold flex items-center gap-2 transition-all"
+                className="px-5 py-2.5 rounded-xl border border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-800 text-xs font-semibold flex items-center gap-2 transition-all shadow-xs"
               >
                 <ArrowLeft className="w-4 h-4" /> Back to Requirements
               </button>
@@ -715,7 +728,7 @@ export default function ProjectWizardPage() {
               <button
                 onClick={handleLaunchAnalysis}
                 disabled={loading}
-                className="px-7 py-3 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold text-xs sm:text-sm shadow-xl shadow-indigo-600/30 flex items-center gap-2 transition-all hover:scale-[1.02]"
+                className="px-7 py-3 rounded-2xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold text-xs sm:text-sm shadow-xl shadow-red-600/30 flex items-center gap-2 transition-all hover:scale-[1.02] border border-red-500/30"
               >
                 {loading ? (
                   <>

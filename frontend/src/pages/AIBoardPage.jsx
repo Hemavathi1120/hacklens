@@ -60,7 +60,6 @@ export default function AIBoardPage() {
   };
 
   const handleMoveColumn = async (cardId, targetColumnId) => {
-    // Optimistic UI
     setCards((prev) =>
       prev.map((c) => (c.id === cardId ? { ...c, column_name: targetColumnId } : c))
     );
@@ -131,16 +130,16 @@ export default function AIBoardPage() {
   });
 
   return (
-    <div className="space-y-6 flex flex-col h-full">
+    <div className="space-y-6 flex flex-col h-full text-zinc-100">
       
       {/* Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-zinc-900/90 border border-zinc-800 shadow-sm">
         <div>
-          <h3 className="text-xl font-bold font-display text-white flex items-center gap-2.5">
-            <Kanban className="w-5 h-5 text-indigo-400" />
+          <h3 className="text-xl font-bold font-display text-zinc-100 flex items-center gap-2.5">
+            <Kanban className="w-5 h-5 text-red-500" />
             AI Board
           </h3>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className="text-xs text-zinc-400 mt-0.5 font-normal">
             Interactive 7-column Kanban board synchronized with Gemini AI evaluation insights and action plan.
           </p>
         </div>
@@ -150,7 +149,7 @@ export default function AIBoardPage() {
           <select
             value={priorityFilter}
             onChange={(e) => setPriorityFilter(e.target.value)}
-            className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-300 focus:outline-none"
+            className="px-3 py-1.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-200 focus:outline-none focus:border-red-500 font-medium"
           >
             <option value="ALL">All Priorities</option>
             <option value="HIGH">High Priority Only</option>
@@ -162,7 +161,7 @@ export default function AIBoardPage() {
           <button
             onClick={handleSyncEvaluation}
             disabled={syncing}
-            className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold flex items-center gap-1.5 shadow-lg shadow-indigo-600/25 transition-all"
+            className="px-4 py-2 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-red-600/20 transition-all hover:scale-[1.02] border border-red-500/30"
           >
             <Sparkles className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
             {syncing ? 'Syncing...' : 'Sync from Evaluation'}
@@ -173,14 +172,13 @@ export default function AIBoardPage() {
       {/* 7-Column Kanban Grid Container */}
       {loading ? (
         <div className="h-64 flex items-center justify-center">
-          <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+          <Loader2 className="w-8 h-8 animate-spin text-red-500" />
         </div>
       ) : (
         <div className="flex-1 overflow-x-auto pb-4 no-scrollbar">
           <div className="flex items-start gap-4 min-w-max">
             {columns.map((col) => {
               const colCards = filteredCards.filter((c) => c.column_name === col.id);
-              // Pinned cards on top
               const sorted = [...colCards].sort((a, b) => (b.is_pinned ? 1 : 0) - (a.is_pinned ? 1 : 0));
 
               return (

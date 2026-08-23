@@ -89,17 +89,19 @@ export default function SuggestionsPage() {
   );
 
   return (
-    <div className="space-y-8 animate-in fade-in">
+    <div className="space-y-8 animate-in fade-in text-zinc-100">
       
       {/* Header */}
-      <div>
-        <h3 className="text-xl font-bold font-display text-white flex items-center gap-2.5">
-          <Lightbulb className="w-5 h-5 text-amber-400" />
-          Project Suggestions & Growth Vectors
-        </h3>
-        <p className="text-xs text-slate-400 mt-1">
-          Curated improvements, technical recommendations, UX enhancements, and hackathon presentation tips.
-        </p>
+      <div className="p-6 rounded-3xl bg-zinc-900/90 border border-zinc-800 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h3 className="text-xl font-bold font-display text-zinc-100 flex items-center gap-2.5">
+            <Lightbulb className="w-5 h-5 text-amber-400" />
+            Project Suggestions & Growth Vectors
+          </h3>
+          <p className="text-xs text-zinc-400 mt-1 font-normal">
+            Curated improvements, technical recommendations, UX enhancements, and hackathon presentation tips.
+          </p>
+        </div>
       </div>
 
       {/* Category Pills */}
@@ -108,10 +110,10 @@ export default function SuggestionsPage() {
           <button
             key={cat}
             onClick={() => setActiveCategory(cat)}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
               activeCategory === cat
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                : 'bg-slate-900/80 border border-slate-800 text-slate-400 hover:text-slate-200'
+                ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-md shadow-red-600/20 border border-red-500/30'
+                : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 shadow-xs'
             }`}
           >
             {cat}
@@ -128,39 +130,39 @@ export default function SuggestionsPage() {
           return (
             <div
               key={idx}
-              className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 hover:border-indigo-500/40 transition-all space-y-4 shadow-xl flex flex-col justify-between"
+              className="p-6 rounded-3xl bg-zinc-900/90 border border-zinc-800 hover:border-red-500/40 hover:shadow-2xl hover:shadow-red-600/10 transition-all space-y-4 shadow-sm flex flex-col justify-between"
             >
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400 bg-indigo-500/10 px-2.5 py-0.5 rounded-md border border-indigo-500/20">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-red-400 bg-red-950/40 px-2.5 py-0.5 rounded-md border border-red-500/30 font-mono">
                     {sug.category}
                   </span>
                   <div className="flex items-center gap-2">
                     <span
                       className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
                         isHigh
-                          ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
-                          : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                          ? 'bg-red-950/50 text-red-400 border-red-500/40'
+                          : 'bg-amber-950/40 text-amber-400 border-amber-500/30'
                       }`}
                     >
                       {sug.priority}
                     </span>
-                    <span className="text-[10px] text-slate-500 font-medium">
+                    <span className="text-[10px] text-zinc-500 font-bold uppercase">
                       {sug.difficulty}
                     </span>
                   </div>
                 </div>
 
-                <h4 className="text-sm font-bold text-white leading-snug">{sug.title}</h4>
+                <h4 className="text-sm font-bold text-zinc-100 leading-snug">{sug.title}</h4>
 
-                <div className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800/80 space-y-2 text-xs">
+                <div className="p-3.5 rounded-2xl bg-zinc-950 border border-zinc-800 space-y-2.5 text-xs">
                   <div>
-                    <span className="text-[10px] font-semibold text-slate-400 uppercase">Why It Matters:</span>
-                    <p className="text-slate-300 mt-0.5 leading-relaxed">{sug.why_it_matters}</p>
+                    <span className="text-[10px] font-bold text-zinc-500 uppercase">Why It Matters:</span>
+                    <p className="text-zinc-300 mt-0.5 leading-relaxed font-normal">{sug.why_it_matters}</p>
                   </div>
-                  <div className="pt-2 border-t border-slate-900">
-                    <span className="text-[10px] font-semibold text-emerald-400 uppercase">Suggested Implementation:</span>
-                    <p className="text-emerald-200 mt-0.5 leading-relaxed font-mono text-[11px]">{sug.suggested_implementation}</p>
+                  <div className="pt-2 border-t border-zinc-800">
+                    <span className="text-[10px] font-bold text-red-400 uppercase">Suggested Implementation:</span>
+                    <p className="text-zinc-200 mt-0.5 leading-relaxed font-mono text-[11px] font-normal">{sug.suggested_implementation}</p>
                   </div>
                 </div>
               </div>

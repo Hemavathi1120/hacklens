@@ -20,7 +20,7 @@ import CitationCard from './CitationCard';
 
 export default function ChatMessage({ message }) {
   const isAssistant = message.role === 'assistant';
-  const citations = message.citations || [];
+  const citations = message.citations || message.sources || [];
   const [copied, setCopied] = useState(false);
 
   const handleCopyMessage = () => {
@@ -29,7 +29,6 @@ export default function ChatMessage({ message }) {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Parse inline markdown formatting (bold, italic, code tags, links)
   const renderInline = (text) => {
     if (!text) return text;
     const parts = [];
@@ -45,19 +44,19 @@ export default function ChatMessage({ message }) {
       const token = match[0];
       if (token.startsWith('**') && token.endsWith('**')) {
         parts.push(
-          <strong key={keyIdx++} className="font-semibold text-indigo-200">
+          <strong key={keyIdx++} className="font-bold text-zinc-100">
             {token.slice(2, -2)}
           </strong>
         );
       } else if (token.startsWith('*') && token.endsWith('*')) {
         parts.push(
-          <em key={keyIdx++} className="italic text-slate-300">
+          <em key={keyIdx++} className="italic text-zinc-300">
             {token.slice(1, -1)}
           </em>
         );
       } else if (token.startsWith('`') && token.endsWith('`')) {
         parts.push(
-          <code key={keyIdx++} className="px-1.5 py-0.5 rounded-md bg-slate-800/90 text-violet-300 text-xs font-mono border border-slate-700/50">
+          <code key={keyIdx++} className="px-1.5 py-0.5 rounded-md bg-zinc-800 text-red-400 text-xs font-mono border border-zinc-700">
             {token.slice(1, -1)}
           </code>
         );
@@ -72,7 +71,6 @@ export default function ChatMessage({ message }) {
     return parts.length > 0 ? parts : text;
   };
 
-  // Component for Code Blocks with Copy button
   const CodeBlock = ({ language, code }) => {
     const [codeCopied, setCodeCopied] = useState(false);
     const copyCode = () => {
@@ -82,21 +80,21 @@ export default function ChatMessage({ message }) {
     };
 
     return (
-      <div className="my-3 rounded-2xl border border-slate-800 bg-slate-950 overflow-hidden shadow-xl">
-        <div className="flex items-center justify-between px-4 py-2 bg-slate-900/80 border-b border-slate-800 text-xs text-slate-400">
-          <span className="flex items-center gap-1.5 font-mono uppercase font-semibold text-indigo-400">
+      <div className="my-3 rounded-2xl border border-zinc-800 bg-zinc-950 overflow-hidden shadow-md">
+        <div className="flex items-center justify-between px-4 py-2 bg-black border-b border-zinc-800 text-xs text-zinc-400 font-mono">
+          <span className="flex items-center gap-1.5 uppercase font-semibold text-red-400">
             <Code2 className="w-3.5 h-3.5" />
             {language || 'code'}
           </span>
           <button
             onClick={copyCode}
-            className="flex items-center gap-1 hover:text-white px-2 py-1 rounded bg-slate-800/50 hover:bg-slate-800 transition-all text-[11px]"
+            className="flex items-center gap-1 hover:text-white px-2 py-1 rounded bg-zinc-800 transition-all text-[11px]"
           >
-            {codeCopied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+            {codeCopied ? <Check className="w-3 h-3 text-red-400" /> : <Copy className="w-3 h-3" />}
             {codeCopied ? 'Copied' : 'Copy'}
           </button>
         </div>
-        <pre className="p-4 overflow-x-auto text-xs font-mono text-emerald-300 leading-relaxed">
+        <pre className="p-4 overflow-x-auto text-xs font-mono text-red-300 leading-relaxed">
           <code>{code}</code>
         </pre>
       </div>
@@ -106,7 +104,6 @@ export default function ChatMessage({ message }) {
   const formatContent = (text) => {
     if (!text) return null;
 
-    // Split text by markdown code blocks first
     const codeBlockRegex = /```(\w*)\n([\s\S]*?)```/g;
     const segments = [];
     let lastIdx = 0;
@@ -134,22 +131,21 @@ export default function ChatMessage({ message }) {
         const trimmed = para.trim();
         if (!trimmed) return null;
 
-        // 1. Scope Boundary Notice / Guardrail Warning
         if (trimmed.includes('Scope Boundary Notice') || trimmed.includes('Guardrail Notice')) {
           const bodyLines = trimmed.split('\n').filter(l => !l.includes('Scope Boundary Notice') && !l.includes('Guardrail Notice'));
           return (
-            <div key={`scope-${i}`} className="my-3 p-4 rounded-2xl bg-gradient-to-r from-rose-950/40 via-red-950/20 to-slate-900 border border-rose-500/30 shadow-lg">
+            <div key={`scope-${i}`} className="my-3 p-4 rounded-2xl bg-zinc-950 border border-red-500/30 shadow-xs">
               <div className="flex items-center gap-2 mb-2">
-                <span className="p-1.5 rounded-lg bg-rose-500/20 text-rose-400">
+                <span className="p-1.5 rounded-lg bg-red-950 text-red-400">
                   <AlertTriangle className="w-4 h-4" />
                 </span>
-                <span className="text-rose-300 font-bold text-xs uppercase tracking-wider">
+                <span className="text-red-400 font-bold text-xs uppercase tracking-wider font-mono">
                   Scope & Grounding Boundary Notice
                 </span>
               </div>
-              <div className="space-y-2 text-xs text-rose-100/90 leading-relaxed">
+              <div className="space-y-2 text-xs text-zinc-300 leading-relaxed font-normal">
                 {bodyLines.map((line, lIdx) => (
-                  <p key={lIdx} className={line.startsWith('•') || line.startsWith('-') ? 'pl-2 text-slate-200' : ''}>
+                  <p key={lIdx} className={line.startsWith('•') || line.startsWith('-') ? 'pl-2 text-zinc-400' : ''}>
                     {renderInline(line)}
                   </p>
                 ))}
@@ -158,23 +154,6 @@ export default function ChatMessage({ message }) {
           );
         }
 
-        // 2. Project Assistant Header / Greeting
-        if (trimmed.startsWith('### **Project Assistant') || trimmed.startsWith('### Project Assistant') || trimmed.startsWith('### **ProjectLens AI Assistant')) {
-          const body = trimmed.replace(/^###\s*(\*\*Project.*?Assistant.*?\*\*|Project.*?Assistant.*?)\n*/i, '').trim();
-          return (
-            <div key={`greeting-${i}`} className="mb-4">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="px-3 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 font-bold text-xs uppercase tracking-wider flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-                  Grounded Project Assistant
-                </span>
-              </div>
-              {body && <div className="text-slate-200 text-sm leading-relaxed whitespace-pre-wrap">{renderInline(body)}</div>}
-            </div>
-          );
-        }
-
-        // 3. Direct Answer Section
         if (
           trimmed.startsWith('### **ANSWER**') ||
           trimmed.startsWith('**ANSWER**') ||
@@ -183,105 +162,24 @@ export default function ChatMessage({ message }) {
         ) {
           const body = trimmed.replace(/^(###\s*)?(\*\*(ANSWER|EXECUTIVE SUMMARY)\*\*|ANSWER|EXECUTIVE SUMMARY):?\n*/, '').trim();
           return (
-            <div key={`ans-${i}`} className="mb-4 p-4 rounded-2xl bg-gradient-to-br from-indigo-950/30 via-slate-900/60 to-slate-950 border border-indigo-500/30 shadow-md">
+            <div key={`ans-${i}`} className="mb-4 p-4 rounded-2xl bg-zinc-950 border border-red-500/30 shadow-xs">
               <div className="flex items-center gap-2 mb-2.5">
-                <span className="p-1 rounded-md bg-indigo-500/20 text-indigo-400">
+                <span className="p-1 rounded-md bg-red-950 text-red-400">
                   <Cpu className="w-3.5 h-3.5" />
                 </span>
-                <span className="text-xs font-bold uppercase tracking-wider text-indigo-300">
+                <span className="text-xs font-bold uppercase tracking-wider text-red-400 font-mono">
                   Direct Grounded Answer
                 </span>
               </div>
-              <div className="text-slate-100 text-sm leading-relaxed whitespace-pre-wrap">
+              <div className="text-zinc-200 text-sm leading-relaxed whitespace-pre-wrap font-normal">
                 {renderInline(body)}
               </div>
             </div>
           );
         }
 
-        // 4. Key Observations & Architecture Details
-        if (
-          trimmed.includes('KEY OBSERVATIONS') ||
-          trimmed.includes('**KEY OBSERVATIONS**') ||
-          trimmed.includes('KEY TECHNICAL DETAILS') ||
-          trimmed.includes('**KEY TECHNICAL DETAILS**') ||
-          trimmed.includes('TECHNICAL ARCHITECTURE & EVIDENCE')
-        ) {
-          const lines = trimmed.split('\n').filter(l => 
-            !l.includes('KEY OBSERVATIONS') && 
-            !l.includes('KEY TECHNICAL DETAILS') &&
-            !l.includes('TECHNICAL ARCHITECTURE & EVIDENCE')
-          );
-          return (
-            <div key={`obs-${i}`} className="mb-4 p-4 rounded-2xl bg-slate-900/90 border border-slate-800/90 shadow-md">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="p-1 rounded-md bg-amber-500/20 text-amber-400">
-                  <Layers className="w-3.5 h-3.5" />
-                </span>
-                <span className="text-xs font-bold uppercase tracking-wider text-amber-300">
-                  Technical Architecture & Grounded Evidence
-                </span>
-              </div>
-              <ul className="space-y-2 text-xs text-slate-200">
-                {lines.map((line, lIdx) => {
-                  const cleaned = line.replace(/^[•\-\*]\s*/, '').trim();
-                  if (!cleaned) return null;
-                  return (
-                    <li key={lIdx} className="flex items-start gap-2.5 leading-relaxed">
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1.5 flex-shrink-0" />
-                      <span>{renderInline(cleaned)}</span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          );
-        }
-
-        // 5. Developer Guide & Recommendations
-        if (
-          trimmed.includes('RECOMMENDATION') || 
-          trimmed.includes('**RECOMMENDATION**') || 
-          trimmed.includes('RECOMMENDATIONS') ||
-          trimmed.includes('DEVELOPER IMPLEMENTATION GUIDE') ||
-          trimmed.includes('DEVELOPER ACTION PLAN')
-        ) {
-          const body = trimmed.replace(/^(###\s*)?(\*\*(RECOMMENDATIONS?|DEVELOPER IMPLEMENTATION GUIDE|DEVELOPER ACTION PLAN)\*\*|RECOMMENDATIONS?):?\n*/, '').trim();
-          const lines = body.split('\n').filter(l => l.trim().length > 0);
-          return (
-            <div key={`rec-${i}`} className="mb-4 p-4 rounded-2xl bg-gradient-to-r from-emerald-950/30 via-slate-900/60 to-slate-950 border border-emerald-500/30 shadow-md">
-              <div className="flex items-center gap-2 mb-2.5">
-                <span className="p-1 rounded-md bg-emerald-500/20 text-emerald-400">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                </span>
-                <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">
-                  Developer Implementation & Action Plan
-                </span>
-              </div>
-              <div className="space-y-1.5 text-xs text-emerald-100/90 leading-relaxed">
-                {lines.map((line, lIdx) => (
-                  <p key={lIdx} className={line.startsWith('•') || line.startsWith('-') || /^\d+\./.test(line) ? 'pl-2' : ''}>
-                    {renderInline(line)}
-                  </p>
-                ))}
-              </div>
-            </div>
-          );
-        }
-
-        // Blockquotes
-        if (trimmed.startsWith('>')) {
-          const quoteText = trimmed.replace(/^>\s*/gm, '');
-          return (
-            <blockquote key={`quote-${i}`} className="my-3 pl-4 py-1 border-l-2 border-indigo-500 text-slate-300 italic text-xs leading-relaxed bg-indigo-950/10 rounded-r-xl">
-              {renderInline(quoteText)}
-            </blockquote>
-          );
-        }
-
-        // Default paragraph
         return (
-          <div key={`p-${i}`} className="text-slate-200 text-sm leading-relaxed mb-3 whitespace-pre-wrap">
+          <div key={`p-${i}`} className="text-zinc-200 text-sm leading-relaxed mb-3 whitespace-pre-wrap font-normal">
             {renderInline(trimmed)}
           </div>
         );
@@ -290,9 +188,9 @@ export default function ChatMessage({ message }) {
   };
 
   return (
-    <div className={`flex gap-3.5 ${isAssistant ? 'justify-start' : 'justify-end'} mb-6 group`}>
+    <div className={`flex gap-3.5 ${isAssistant ? 'justify-start' : 'justify-end'} mb-6 group text-zinc-100`}>
       {isAssistant && (
-        <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-violet-600 flex items-center justify-center flex-shrink-0 text-white shadow-lg shadow-indigo-500/20 mt-1">
+        <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-red-600 via-rose-600 to-zinc-900 flex items-center justify-center flex-shrink-0 text-white shadow-md shadow-red-600/20 mt-1 border border-red-500/30">
           <Bot className="w-5 h-5" />
         </div>
       )}
@@ -301,25 +199,25 @@ export default function ChatMessage({ message }) {
         <div
           className={`relative p-5 rounded-3xl transition-all ${
             isAssistant
-              ? 'bg-slate-900/90 border border-slate-800 text-slate-100 shadow-2xl backdrop-blur-md'
-              : 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-xl shadow-indigo-600/25 rounded-tr-md'
+              ? 'bg-zinc-900/90 border border-zinc-800 text-zinc-200 shadow-md backdrop-blur-md'
+              : 'bg-gradient-to-r from-red-600 via-rose-600 to-red-700 text-white shadow-lg shadow-red-600/25 rounded-tr-md border border-red-500/30'
           }`}
         >
           {/* Assistant Header Actions */}
           {isAssistant && (
-            <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-800/80 text-xs text-slate-400">
+            <div className="flex items-center justify-between pb-3 mb-3 border-b border-zinc-800 text-xs text-zinc-500 font-mono">
               <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="font-semibold text-slate-300 text-[11px] uppercase tracking-wider">
+                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                <span className="font-bold text-zinc-300 text-[11px] uppercase tracking-wider">
                   RAG Evidence Synthesizer
                 </span>
               </div>
               <button
                 onClick={handleCopyMessage}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all text-[11px] font-medium"
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-all text-[11px] font-medium"
                 title="Copy Full Response"
               >
-                {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                {copied ? <Check className="w-3 h-3 text-red-400" /> : <Copy className="w-3 h-3" />}
                 {copied ? 'Copied' : 'Copy'}
               </button>
             </div>
@@ -334,14 +232,14 @@ export default function ChatMessage({ message }) {
 
           {/* Citations section if assistant message */}
           {isAssistant && citations.length > 0 && (
-            <div className="mt-5 pt-4 border-t border-slate-800/90">
+            <div className="mt-5 pt-4 border-t border-zinc-800">
               <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2 text-xs font-bold text-slate-300 uppercase tracking-wider">
-                  <BookOpen className="w-4 h-4 text-indigo-400" />
+                <div className="flex items-center gap-2 text-xs font-bold text-zinc-300 uppercase tracking-wider font-mono">
+                  <BookOpen className="w-4 h-4 text-red-400" />
                   <span>Ground-Truth Source Citations ({citations.length})</span>
                 </div>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-mono font-medium">
-                  Verified 1:1
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-950/40 text-red-400 border border-red-500/30 font-mono font-medium">
+                  Verified 1:1 ✓
                 </span>
               </div>
               <div className="grid grid-cols-1 gap-2.5">
@@ -355,7 +253,7 @@ export default function ChatMessage({ message }) {
       </div>
 
       {!isAssistant && (
-        <div className="w-9 h-9 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center flex-shrink-0 text-slate-300 mt-1 shadow-md">
+        <div className="w-9 h-9 rounded-2xl bg-zinc-800 border border-zinc-700 flex items-center justify-center flex-shrink-0 text-zinc-300 mt-1 shadow-xs">
           <User className="w-5 h-5" />
         </div>
       )}

@@ -2,22 +2,11 @@ import json
 import re
 import math
 import sys
-import importlib
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Set
 
-# Auto-link virtual environment site-packages if available
-_venv_site = Path(__file__).resolve().parent.parent.parent / ".venv" / "Lib" / "site-packages"
-if _venv_site.exists() and str(_venv_site) not in sys.path:
-    sys.path.insert(0, str(_venv_site))
-
-try:
-    from google import genai
-    from google.genai import types
-except Exception:
-    genai = None  # type: ignore
-    types = None  # type: ignore
-
+from google import genai
+from google.genai import types
 from backend.config import settings
 
 class GeminiService:
@@ -53,9 +42,9 @@ class GeminiService:
     def __init__(self):
         self.api_key = settings.GEMINI_API_KEY
         self.model_name = "gemini-2.5-flash"
-        self.embedding_model = "text-embedding-004"
-        self.client = None
-        if self.api_key and genai is not None:
+        self.embedding_model = "models/gemini-embedding-001"
+        self.client: Optional[genai.Client] = None
+        if self.api_key:
             try:
                 self.client = genai.Client(api_key=self.api_key)
                 print(f"[GeminiService] Connected to Gemini API ({self.model_name})")
@@ -77,7 +66,7 @@ class GeminiService:
                 if resp.embeddings and len(resp.embeddings) > 0:
                     vals = resp.embeddings[0].values
                     if vals is not None:
-                        return [float(v) for v in vals]
+                        return list(vals)
             except Exception as e:
                 print(f"[GeminiService] Cloud embedding failed: {e}")
         return [0.0] * 3072
@@ -275,19 +264,21 @@ Return strictly valid JSON with this exact structure:
   ]
 }}
 """
-        try:
-            response = self.client.models.generate_content(
-                model=self.model_name,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    temperature=0.2
+        if self.client and types is not None:
+            try:
+                response = self.client.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        temperature=0.2
+                    )
                 )
-            )
-            return json.loads(response.text)
-        except Exception as e:
-            print(f"Error extracting requirements from docs: {e}")
-            return {
+                if response.text:
+                    return json.loads(response.text)
+            except Exception as e:
+                print(f"Error extracting requirements from docs: {e}")
+        return {
                 "functional_requirements": [
                     "User authentication and profile management",
                     "Document parsing, ingestion, and semantic chunking",
@@ -498,32 +489,32 @@ DEVELOPER QUESTION:
 Synthesize a deeply informative, developer-ready, structured response answering the question using ONLY the provided project evidence.
 """
 
-        # Attempt LLM generation with multi-model cascade
-        candidate_models = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-flash", self.model_name]
-        llm_answer = None
+            # Attempt LLM generation with multi-model cascade
+            candidate_models = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-flash", self.model_name]
+            llm_answer = None
 
-        for model_cand in candidate_models:
-            try:
-                response = self.client.models.generate_content(
-                    model=model_cand,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        system_instruction=system_instruction,
-                        temperature=0.25
+            for model_cand in candidate_models:
+                try:
+                    response = self.client.models.generate_content(
+                        model=model_cand,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            system_instruction=system_instruction,
+                            temperature=0.25
+                        )
                     )
-                )
-                if response and response.text and len(response.text.strip()) > 20:
-                    llm_answer = response.text
-                    break
-            except Exception as e:
-                continue
+                    if response and response.text and len(response.text.strip()) > 20:
+                        llm_answer = response.text
+                        break
+                except Exception as e:
+                    continue
 
-        if llm_answer:
-            used_citations = valid_citations if context_blocks and "No relevant" not in context_str else []
-            return {
-                "answer": llm_answer,
-                "citations": used_citations
-            }
+            if llm_answer:
+                used_citations = valid_citations if context_blocks and "No relevant" not in context_str else []
+                return {
+                    "answer": llm_answer,
+                    "citations": used_citations
+                }
 
         # DYNAMIC, QUESTION-AWARE EXTRACTIVE RAG SYNTHESIS
         # (Activated if external LLM API quota is temporarily exhausted)
@@ -539,11 +530,11 @@ Synthesize a deeply informative, developer-ready, structured response answering 
         requirements = [r.get("requirement", "") for r in project.get("requirements", []) if r.get("requirement")]
 
         # Sentence extraction and scoring across all retrieved chunks
-        scored_sentences = []
+        scored_sentences: List[Dict[str, Any]] = []
         for c in retrieved_chunks:
-            doc_file = c.get("filename", "Documentation")
+            doc_file = str(c.get("filename", "Documentation"))
             page_no = c.get("page_number", 1)
-            raw_content = c.get("content", "")
+            raw_content = str(c.get("content", ""))
             
             # Split into meaningful sentences
             sentences = re.split(r'(?<=[.!?])\s+', raw_content)
@@ -568,17 +559,18 @@ Synthesize a deeply informative, developer-ready, structured response answering 
                 if any(k in q_lower for k in ['user', 'who', 'target', 'audience', 'persona']) and any(k in s_lower for k in ['user', 'citizen', 'researcher', 'stakeholder', 'analyst', 'team', 'person']):
                     boost += 3
 
-                score = overlap * 2 + boost
-                scored_sentences.append({
+                score_val = int(overlap * 2 + boost)
+                item: Dict[str, Any] = {
                     "sentence": s_clean,
-                    "score": score,
+                    "score": score_val,
                     "doc": doc_file,
                     "page": page_no,
                     "chunk": c
-                })
+                }
+                scored_sentences.append(item)
 
-        scored_sentences.sort(key=lambda x: x["score"], reverse=True)
-        top_sentences = [s for s in scored_sentences if s["score"] > 0][:4]
+        scored_sentences.sort(key=lambda x: int(x["score"]), reverse=True)
+        top_sentences: List[Dict[str, Any]] = [s for s in scored_sentences if int(s["score"]) > 0][:4]
         if not top_sentences and scored_sentences:
             top_sentences = scored_sentences[:3]
 
@@ -679,18 +671,24 @@ Synthesize a deeply informative, developer-ready, structured response answering 
 {rec_bullets}"""
 
         # Return only the citations that contributed to this specific answer
-        matching_citations = []
-        seen_cites = set()
+        matching_citations: List[Dict[str, Any]] = []
+        seen_cites: Set[str] = set()
         for s in top_sentences:
-            cite_key = f"{s['doc']}-{s['page']}"
+            doc_file_name = str(s.get("doc", "Document"))
+            page_num_val = s.get("page", 1)
+            chunk_data = s.get("chunk")
+            chunk_dict: Dict[str, Any] = chunk_data if isinstance(chunk_data, dict) else {}
+            sent_content = str(s.get("sentence", ""))
+            
+            cite_key = f"{doc_file_name}-{page_num_val}"
             if cite_key not in seen_cites:
                 seen_cites.add(cite_key)
                 matching_citations.append({
                     "source_id": len(matching_citations) + 1,
-                    "filename": s["doc"],
-                    "page_number": s["page"],
-                    "section_title": s["chunk"].get("section_title", "Document Section"),
-                    "snippet": s["sentence"][:220]
+                    "filename": doc_file_name,
+                    "page_number": page_num_val,
+                    "section_title": str(chunk_dict.get("section_title", "Document Section")),
+                    "snippet": sent_content[:220]
                 })
 
         if not matching_citations and valid_citations:

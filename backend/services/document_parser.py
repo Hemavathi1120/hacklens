@@ -44,7 +44,7 @@ class DocumentParser:
                     if not p_text:
                         continue
                     # Check if paragraph is heading
-                    if p.style.name.startswith("Heading"):
+                    if p.style and hasattr(p.style, "name") and p.style.name and p.style.name.startswith("Heading"):
                         if section_paragraphs:
                             content_str = "\n".join(section_paragraphs)
                             extracted_pages.append({

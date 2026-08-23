@@ -1,9 +1,21 @@
+import { supabase } from './supabase';
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
 async function request(endpoint, options = {}) {
   const url = `${API_BASE_URL}${endpoint}`;
+  
+  let authHeaders = {};
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      authHeaders['Authorization'] = `Bearer ${session.access_token}`;
+    }
+  } catch (_) {}
+
   const headers = {
     ...(options.isFormData ? {} : { 'Content-Type': 'application/json' }),
+    ...authHeaders,
     ...options.headers,
   };
 

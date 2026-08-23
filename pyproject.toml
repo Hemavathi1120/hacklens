@@ -1,7 +1,9 @@
 [tool.pyrefly]
-python-interpreter-path = ".venv/Scripts/python.exe"
+python-interpreter-path = "C:/Users/saidh/AppData/Local/Programs/Python/Python312/python.exe"
 search-path = [
     "backend",
     "scratch",
-    "."
+    ".",
+    "C:/Users/saidh/AppData/Local/Programs/Python/Python312/Lib/site-packages",
+    "C:/Users/saidh/AppData/Roaming/Python/Python312/site-packages"
 ]

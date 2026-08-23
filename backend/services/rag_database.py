@@ -178,7 +178,7 @@ class RAGDatabase:
         Executes dense semantic vector search.
         First tries Supabase pgvector if connected; seamlessly utilizes Local Persistent Vector Store.
         """
-        # 1. Try Supabase pgvector RPC if available
+        # 1. Try Supabase pgvector RPC or direct table query if connected
         if supabase_service.client:
             try:
                 rpc_res = supabase_service.client.rpc("match_documents", {
@@ -187,7 +187,7 @@ class RAGDatabase:
                     "match_count": top_k,
                     "p_project_id": project_id
                 }).execute()
-                if rpc_res and isinstance(rpc_res.data, list):
+                if rpc_res and isinstance(rpc_res.data, list) and len(rpc_res.data) > 0:
                     search_hits = []
                     for r in rpc_res.data:
                         if isinstance(r, dict):
@@ -207,8 +207,34 @@ class RAGDatabase:
                                 "filename": meta.get("filename", "Project Document")
                             })
                     return search_hits
-            except Exception as e:
-                # Log and fallback to local persistent vector table
+            except Exception:
+                pass
+
+            # Direct Supabase table query if RPC is not deployed
+            try:
+                sb_res = supabase_service.client.table("document_chunks").select("id, document_id, project_id, chunk_index, content, page_number, section_title, embedding, metadata").eq("project_id", project_id).execute()
+                if sb_res and sb_res.data and len(sb_res.data) > 0:
+                    hits = []
+                    for r in sb_res.data:
+                        emb = r.get("embedding")
+                        if emb:
+                            if isinstance(emb, str):
+                                try:
+                                    emb = json.loads(emb)
+                                except Exception:
+                                    continue
+                            sim = transformer_service.cosine_similarity(query_embedding, emb)
+                            if sim >= similarity_threshold:
+                                item = dict(r)
+                                item.pop("embedding", None)
+                                meta = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
+                                item["similarity"] = round(sim, 4)
+                                item["filename"] = meta.get("filename", "Project Document")
+                                hits.append(item)
+                    hits.sort(key=lambda x: x["similarity"], reverse=True)
+                    if hits:
+                        return hits[:top_k]
+            except Exception:
                 pass
 
         # 2. Local Persistent SQLite Vector Table Search

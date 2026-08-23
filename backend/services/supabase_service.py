@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from supabase import create_client, Client
+from postgrest import CountMethod
 from backend.config import settings
 
 class SupabaseService:
@@ -18,7 +19,7 @@ class SupabaseService:
         self.client: Optional[Client] = None
         self.storage_bucket = settings.STORAGE_BUCKET
         
-        # Local SQLite database path for guaranteed data persistence & instant speed
+        # Local SQLite database path for local cache & resilience
         if os.environ.get("VERCEL"):
             self.db_path = Path("/tmp") / "projectlens.db"
         else:
@@ -35,11 +36,84 @@ class SupabaseService:
         if self.url and self.key:
             try:
                 self.client = create_client(self.url, self.key)
-                print(f"Supabase client initialized: {self.url}")
+                print(f"[SupabaseService] Connected to Supabase Cloud: {self.url}")
+                # Auto-heal legacy project records
+                self._auto_heal_project_ownership()
             except Exception as e:
-                print(f"Supabase client initialization warning: {e}")
+                print(f"[SupabaseService] Supabase initialization warning: {e}")
         else:
-            print("Supabase URL/Key not set - running in standalone SQLite persistent local mode.")
+            print("[SupabaseService] Supabase URL/Key not set - running in standalone SQLite persistent local mode.")
+
+    def _is_uuid(self, val: Optional[str]) -> bool:
+        if not val:
+            return False
+        return bool(re.match(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$', str(val).strip()))
+
+    def _clean_user_id(self, user_id: Optional[str]) -> Optional[str]:
+        """
+        Ensures user_id is a valid UUID for Supabase auth.users foreign key constraints.
+        Resolves email addresses or legacy user prefixes (e.g. user-email-domain)
+        to their canonical Supabase auth.users UUID.
+        Returns None if user_id cannot be mapped to a valid auth.users UUID.
+        """
+        if not user_id:
+            return None
+        user_str = str(user_id).strip()
+        if user_str in ("demo-user", "demo", "guest", "anonymous-user"):
+            return None
+        # Check standard UUID regex
+        if re.match(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$', user_str):
+            return user_str
+
+        # Try to resolve fallback string / email against Supabase auth.users
+        if self.client:
+            try:
+                clean_search = user_str
+                if clean_search.startswith("user-"):
+                    clean_search = clean_search[5:]
+                clean_search = clean_search.replace("-gmail-com", "@gmail.com").replace("-", ".")
+                if "@" not in clean_search and "." in clean_search:
+                    parts = clean_search.rsplit(".", 1)
+                    clean_search = parts[0] + "@" + parts[1]
+
+                users = self.client.auth.admin.list_users()
+                for u in users:
+                    if u.email and (clean_search.lower() in u.email.lower() or u.email.lower() in clean_search.lower()):
+                        return u.id
+                    if getattr(u, 'id', None) == user_str:
+                        return u.id
+            except Exception:
+                pass
+
+        return None
+
+    def _auto_heal_project_ownership(self):
+        """
+        Synchronizes any unassigned/legacy projects in SQLite and Supabase Cloud
+        with their corresponding auth.users UUIDs based on known user emails.
+        """
+        if not self.client:
+            return
+        try:
+            users = self.client.auth.admin.list_users()
+            user_map = {}
+            for u in users:
+                if u.email:
+                    email_clean = u.email.lower().replace("@", "-").replace(".", "-")
+                    user_map[f"user-{email_clean}"] = u.id
+                    user_map[u.email.lower()] = u.id
+
+            with sqlite3.connect(self.db_path) as conn:
+                c = conn.cursor()
+                for legacy_id, valid_uuid in user_map.items():
+                    c.execute("UPDATE projects SET user_id = ? WHERE user_id = ?", (valid_uuid, legacy_id))
+                    c.execute("UPDATE documents SET user_id = ? WHERE user_id = ?", (valid_uuid, legacy_id))
+                    c.execute("UPDATE evaluations SET user_id = ? WHERE user_id = ?", (valid_uuid, legacy_id))
+                    c.execute("UPDATE ai_board_items SET user_id = ? WHERE user_id = ?", (valid_uuid, legacy_id))
+                    c.execute("UPDATE chat_sessions SET user_id = ? WHERE user_id = ?", (valid_uuid, legacy_id))
+                conn.commit()
+        except Exception as e:
+            print(f"[SupabaseService] Auto-heal warning: {e}")
 
     def _init_sqlite(self):
         with sqlite3.connect(self.db_path) as conn:
@@ -172,29 +246,132 @@ class SupabaseService:
     # PROJECTS
     # =========================================================================
     def get_projects(self, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        if not user_id:
-            return []
-        
-        projects = []
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            c = conn.cursor()
-            c.execute("SELECT * FROM projects WHERE user_id = ? ORDER BY updated_at DESC", (user_id,))
-            rows = c.fetchall()
-            for r in rows:
-                p = dict(r)
-                p["target_users"] = json.loads(p.get("target_users") or "[]")
-                p["technologies"] = json.loads(p.get("technologies") or "[]")
-                p["constraints"] = json.loads(p.get("constraints") or "[]")
-                
-                # Fetch doc count
-                c_docs = conn.cursor()
-                c_docs.execute("SELECT COUNT(*) FROM documents WHERE project_id = ?", (p["id"],))
-                p["document_count"] = c_docs.fetchone()[0]
-                projects.append(p)
-        return projects
+        clean_uid = self._clean_user_id(user_id) if user_id else None
+        is_demo_query = (user_id == "demo-user")
+        projects_dict: Dict[str, Dict[str, Any]] = {}
+
+        # 1. Query Supabase Cloud
+        if self.client:
+            try:
+                query = self.client.table("projects").select("*").order("updated_at", desc=True)
+                if is_demo_query:
+                    # Scope demo query strictly to demo projects
+                    query = query.eq("name", "CivicLens AI")
+                elif clean_uid:
+                    query = query.eq("user_id", clean_uid)
+
+                res = query.execute()
+                if res and res.data:
+                    for raw_p in res.data:
+                        if not isinstance(raw_p, dict):
+                            continue
+                        p: Dict[str, Any] = dict(raw_p)
+                        
+                        # Ensure lists
+                        for field in ("target_users", "technologies", "constraints"):
+                            val = p.get(field)
+                            if isinstance(val, str):
+                                try:
+                                    p[field] = json.loads(val)
+                                except Exception:
+                                    p[field] = []
+                            elif not isinstance(val, list):
+                                p[field] = []
+
+                        # Count docs
+                        try:
+                            doc_res = self.client.table("documents").select("id", count=CountMethod.exact).eq("project_id", p["id"]).execute()
+                            p["document_count"] = doc_res.count if doc_res and doc_res.count is not None else 0
+                        except Exception:
+                            p["document_count"] = 0
+
+                        projects_dict[p["id"]] = p
+            except Exception as e:
+                print(f"[SupabaseService] Cloud get_projects warning: {e}")
+
+        # 2. Query Local SQLite & Merge
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                c = conn.cursor()
+                if is_demo_query:
+                    c.execute("SELECT * FROM projects WHERE user_id = 'demo-user' OR name = 'CivicLens AI' ORDER BY updated_at DESC")
+                elif clean_uid or (user_id and user_id != "demo-user"):
+                    uids = [u for u in (clean_uid, user_id) if u]
+                    placeholders = ",".join("?" for _ in uids)
+                    c.execute(f"SELECT * FROM projects WHERE user_id IN ({placeholders}) ORDER BY updated_at DESC", uids)
+                else:
+                    c.execute("SELECT * FROM projects ORDER BY updated_at DESC")
+
+                rows = c.fetchall()
+                for r in rows:
+                    p = dict(r)
+                    p_id = p["id"]
+
+                    for field in ("target_users", "technologies", "constraints"):
+                        val = p.get(field)
+                        if isinstance(val, str):
+                            try:
+                                p[field] = json.loads(val)
+                            except Exception:
+                                p[field] = []
+                        elif not isinstance(val, list):
+                            p[field] = []
+
+                    c_docs = conn.cursor()
+                    c_docs.execute("SELECT COUNT(*) FROM documents WHERE project_id = ?", (p_id,))
+                    doc_cnt = c_docs.fetchone()[0]
+                    p["document_count"] = max(p.get("document_count", 0), doc_cnt)
+
+                    if p_id not in projects_dict:
+                        projects_dict[p_id] = p
+                    else:
+                        if projects_dict[p_id].get("document_count", 0) == 0 and doc_cnt > 0:
+                            projects_dict[p_id]["document_count"] = doc_cnt
+        except Exception as e:
+            print(f"[SupabaseService] SQLite get_projects warning: {e}")
+
+        results = list(projects_dict.values())
+        results.sort(key=lambda x: str(x.get("updated_at") or x.get("created_at") or ""), reverse=True)
+        return results
 
     def get_project(self, project_id: str) -> Optional[Dict[str, Any]]:
+        # 1. Try Supabase Cloud
+        if self.client and self._is_uuid(project_id):
+            try:
+                res = self.client.table("projects").select("*").eq("id", project_id).execute()
+                if res and res.data and len(res.data) > 0 and isinstance(res.data[0], dict):
+                    p: Dict[str, Any] = dict(res.data[0])
+                    
+                    # Ensure lists
+                    for field in ("target_users", "technologies", "constraints"):
+                        val = p.get(field)
+                        if isinstance(val, str):
+                            try:
+                                p[field] = json.loads(val)
+                            except Exception:
+                                p[field] = []
+                        elif not isinstance(val, list):
+                            p[field] = []
+
+                    # Doc count
+                    try:
+                        doc_res = self.client.table("documents").select("id", count=CountMethod.exact).eq("project_id", project_id).execute()
+                        p["document_count"] = doc_res.count if doc_res and doc_res.count is not None else 0
+                    except Exception:
+                        p["document_count"] = 0
+                    
+                    # Requirements
+                    try:
+                        req_res = self.client.table("project_requirements").select("*").eq("project_id", project_id).order("created_at").execute()
+                        p["requirements"] = [dict(r) for r in req_res.data if isinstance(r, dict)] if req_res and req_res.data else []
+                    except Exception:
+                        p["requirements"] = []
+                    return p
+            except Exception as e:
+                print(f"[SupabaseService] Cloud get_project warning: {e}")
+
+        # 2. Fallback / Local Cache
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             c = conn.cursor()
@@ -211,7 +388,6 @@ class SupabaseService:
             c_docs.execute("SELECT COUNT(*) FROM documents WHERE project_id = ?", (p["id"],))
             p["document_count"] = c_docs.fetchone()[0]
             
-            # Fetch requirements
             c_reqs = conn.cursor()
             c_reqs.execute("SELECT * FROM project_requirements WHERE project_id = ? ORDER BY created_at ASC", (project_id,))
             p["requirements"] = [dict(r) for r in c_reqs.fetchall()]
@@ -221,10 +397,14 @@ class SupabaseService:
         p_id = project_data.get("id") or str(uuid.uuid4())
         now = datetime.now(timezone.utc).isoformat()
         
-        target_users = json.dumps(project_data.get("target_users", []))
-        technologies = json.dumps(project_data.get("technologies", []))
-        constraints = json.dumps(project_data.get("constraints", []))
+        raw_uid = project_data.get("user_id") or "demo-user"
+        clean_uid = self._clean_user_id(raw_uid)
 
+        target_users_list = project_data.get("target_users", [])
+        technologies_list = project_data.get("technologies", [])
+        constraints_list = project_data.get("constraints", [])
+
+        # 1. Update SQLite Cache
         with sqlite3.connect(self.db_path) as conn:
             c = conn.cursor()
             c.execute("""
@@ -232,6 +412,7 @@ class SupabaseService:
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     name=excluded.name,
+                    user_id=COALESCE(excluded.user_id, projects.user_id),
                     description=excluded.description,
                     problem_statement=excluded.problem_statement,
                     initial_idea=excluded.initial_idea,
@@ -243,21 +424,20 @@ class SupabaseService:
                     updated_at=excluded.updated_at
             """, (
                 p_id,
-                project_data.get("user_id", "demo-user"),
+                clean_uid or raw_uid,
                 project_data.get("name", "Untitled Project"),
                 project_data.get("description", ""),
                 project_data.get("problem_statement", ""),
                 project_data.get("initial_idea", ""),
-                target_users,
-                technologies,
-                constraints,
+                json.dumps(target_users_list if isinstance(target_users_list, list) else []),
+                json.dumps(technologies_list if isinstance(technologies_list, list) else []),
+                json.dumps(constraints_list if isinstance(constraints_list, list) else []),
                 project_data.get("status", "draft"),
                 project_data.get("overall_score", 0),
                 project_data.get("created_at", now),
                 now
             ))
             
-            # Save requirements if provided
             reqs = project_data.get("requirements")
             if reqs is not None and len(reqs) > 0:
                 c.execute("DELETE FROM project_requirements WHERE project_id = ?", (p_id,))
@@ -277,29 +457,46 @@ class SupabaseService:
                     ))
             conn.commit()
 
-        # Attempt Supabase sync
+        # 2. Persist to Supabase Cloud
         if self.client:
             try:
                 self.client.table("projects").upsert({
                     "id": p_id,
-                    "user_id": project_data.get("user_id", "demo-user"),
+                    "user_id": clean_uid,
                     "name": project_data.get("name", "Untitled Project"),
                     "description": project_data.get("description", ""),
                     "problem_statement": project_data.get("problem_statement", ""),
                     "initial_idea": project_data.get("initial_idea", ""),
-                    "target_users": project_data.get("target_users", []),
-                    "technologies": project_data.get("technologies", []),
-                    "constraints": project_data.get("constraints", []),
+                    "target_users": target_users_list if isinstance(target_users_list, list) else json.loads(target_users_list or "[]"),
+                    "technologies": technologies_list if isinstance(technologies_list, list) else json.loads(technologies_list or "[]"),
+                    "constraints": constraints_list if isinstance(constraints_list, list) else json.loads(constraints_list or "[]"),
                     "status": project_data.get("status", "draft"),
-                    "overall_score": project_data.get("overall_score", 0),
+                    "overall_score": float(project_data.get("overall_score", 0)),
                     "updated_at": now
                 }).execute()
-            except Exception:
-                pass
+
+                # Sync requirements in Supabase
+                reqs = project_data.get("requirements")
+                if reqs is not None and len(reqs) > 0:
+                    supabase_reqs = []
+                    for req in reqs:
+                        supabase_reqs.append({
+                            "id": req.get("id") or str(uuid.uuid4()),
+                            "project_id": p_id,
+                            "category": req.get("category", "functional"),
+                            "requirement": req.get("requirement", ""),
+                            "priority": req.get("priority", "MEDIUM"),
+                            "status": req.get("status", "pending"),
+                            "created_at": req.get("created_at", now)
+                        })
+                    self.client.table("project_requirements").upsert(supabase_reqs).execute()
+            except Exception as e:
+                print(f"[SupabaseService] Cloud save_project error: {e}")
 
         return self.get_project(p_id) or {}
 
     def delete_project(self, project_id: str) -> bool:
+        # 1. Delete from SQLite
         with sqlite3.connect(self.db_path) as conn:
             c = conn.cursor()
             c.execute("DELETE FROM projects WHERE id = ?", (project_id,))
@@ -310,14 +507,23 @@ class SupabaseService:
             c.execute("DELETE FROM ai_board_items WHERE project_id = ?", (project_id,))
             c.execute("DELETE FROM chat_sessions WHERE project_id = ?", (project_id,))
             conn.commit()
+
+        # 2. Delete from Supabase Cloud
+        if self.client:
+            try:
+                self.client.table("projects").delete().eq("id", project_id).execute()
+            except Exception as e:
+                print(f"[SupabaseService] Cloud delete_project error: {e}")
         return True
 
     # =========================================================================
-    # DOCUMENTS & CHUNKS
+    # DOCUMENTS & CHUNKS (RAG PERSISTENCE)
     # =========================================================================
     def save_document(self, doc_data: Dict[str, Any]) -> Dict[str, Any]:
         d_id = doc_data.get("id") or str(uuid.uuid4())
         now = datetime.now(timezone.utc).isoformat()
+        
+        # 1. Save to SQLite
         with sqlite3.connect(self.db_path) as conn:
             c = conn.cursor()
             c.execute("""
@@ -342,9 +548,42 @@ class SupabaseService:
                 now
             ))
             conn.commit()
+
+        # 2. Persist to Supabase Cloud
+        if self.client:
+            try:
+                clean_uid = self._clean_user_id(doc_data.get("user_id"))
+                self.client.table("documents").upsert({
+                    "id": d_id,
+                    "project_id": doc_data.get("project_id"),
+                    "user_id": clean_uid,
+                    "filename": doc_data.get("filename"),
+                    "file_type": doc_data.get("file_type"),
+                    "file_size": doc_data.get("file_size", 0),
+                    "storage_path": doc_data.get("storage_path", ""),
+                    "processing_status": doc_data.get("processing_status", "pending"),
+                    "document_version": doc_data.get("document_version", 1),
+                    "summary": doc_data.get("summary", ""),
+                    "updated_at": now
+                }).execute()
+            except Exception as e:
+                print(f"[SupabaseService] Cloud save_document error: {e}")
+
         return self.get_document(d_id) or {}
 
     def get_document(self, doc_id: str) -> Optional[Dict[str, Any]]:
+        if self.client:
+            try:
+                res = self.client.table("documents").select("*").eq("id", doc_id).execute()
+                if res and res.data and len(res.data) > 0 and isinstance(res.data[0], dict):
+                    doc: Dict[str, Any] = dict(res.data[0])
+                    # Get chunk count
+                    cnt_res = self.client.table("document_chunks").select("id", count=CountMethod.exact).eq("document_id", doc_id).execute()
+                    doc["chunk_count"] = cnt_res.count if cnt_res and cnt_res.count is not None else 0
+                    return doc
+            except Exception:
+                pass
+
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             c = conn.cursor()
@@ -353,13 +592,31 @@ class SupabaseService:
             if not row:
                 return None
             doc = dict(row)
-            # Fetch chunks count
             c_cnt = conn.cursor()
             c_cnt.execute("SELECT COUNT(*) FROM document_chunks WHERE document_id = ?", (doc_id,))
             doc["chunk_count"] = c_cnt.fetchone()[0]
             return doc
 
     def get_project_documents(self, project_id: str) -> List[Dict[str, Any]]:
+        if self.client:
+            try:
+                res = self.client.table("documents").select("*").eq("project_id", project_id).order("created_at", desc=True).execute()
+                if res and res.data is not None and len(res.data) > 0:
+                    docs: List[Dict[str, Any]] = []
+                    for raw_d in res.data:
+                        if not isinstance(raw_d, dict):
+                            continue
+                        d: Dict[str, Any] = dict(raw_d)
+                        try:
+                            cnt_res = self.client.table("document_chunks").select("id", count=CountMethod.exact).eq("document_id", d["id"]).execute()
+                            d["chunk_count"] = cnt_res.count if cnt_res and cnt_res.count is not None else 0
+                        except Exception:
+                            d["chunk_count"] = 0
+                        docs.append(d)
+                    return docs
+            except Exception:
+                pass
+
         docs = []
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
@@ -379,10 +636,19 @@ class SupabaseService:
             c.execute("DELETE FROM documents WHERE id = ?", (doc_id,))
             c.execute("DELETE FROM document_chunks WHERE document_id = ?", (doc_id,))
             conn.commit()
+
+        if self.client:
+            try:
+                self.client.table("document_chunks").delete().eq("document_id", doc_id).execute()
+                self.client.table("documents").delete().eq("id", doc_id).execute()
+            except Exception as e:
+                print(f"[SupabaseService] Cloud delete_document error: {e}")
         return True
 
     def save_chunks(self, chunks: List[Dict[str, Any]]):
         now = datetime.now(timezone.utc).isoformat()
+        
+        # 1. Save to SQLite
         with sqlite3.connect(self.db_path) as conn:
             c = conn.cursor()
             for chunk in chunks:
@@ -412,7 +678,43 @@ class SupabaseService:
                 ))
             conn.commit()
 
+        # 2. Persist Vector Chunks into Supabase Cloud
+        if self.client and chunks:
+            try:
+                # Prepare payload for Supabase pgvector column
+                supabase_records = []
+                for chunk in chunks:
+                    supabase_records.append({
+                        "id": chunk.get("id") or str(uuid.uuid4()),
+                        "document_id": chunk.get("document_id"),
+                        "project_id": chunk.get("project_id"),
+                        "chunk_index": chunk.get("chunk_index", 0),
+                        "content": chunk.get("content", ""),
+                        "page_number": chunk.get("page_number", 1),
+                        "section_title": chunk.get("section_title", "General"),
+                        "embedding": chunk.get("embedding"),  # List[float] converts to pgvector
+                        "metadata": chunk.get("metadata", {}),
+                        "created_at": now
+                    })
+                
+                # Batch upsert in chunks of 50 to avoid request size limits
+                batch_size = 50
+                for i in range(0, len(supabase_records), batch_size):
+                    batch = supabase_records[i:i + batch_size]
+                    self.client.table("document_chunks").upsert(batch).execute()
+                print(f"[SupabaseService] Persisted {len(chunks)} chunks with 3072-dim embeddings to Supabase pgvector.")
+            except Exception as e:
+                print(f"[SupabaseService] Cloud save_chunks error: {e}")
+
     def get_document_chunks(self, document_id: str) -> List[Dict[str, Any]]:
+        if self.client:
+            try:
+                res = self.client.table("document_chunks").select("id, document_id, project_id, chunk_index, content, page_number, section_title, metadata, created_at").eq("document_id", document_id).order("chunk_index").execute()
+                if res and res.data and len(res.data) > 0:
+                    return [dict(ch) for ch in res.data if isinstance(ch, dict)]
+            except Exception:
+                pass
+
         chunks = []
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
@@ -424,64 +726,6 @@ class SupabaseService:
                 chunks.append(ch)
         return chunks
 
-    def vector_search(self, project_id: str, query_embedding: List[float], raw_query: str = "", top_k: int = 6, similarity_threshold: float = 0.15) -> List[Dict[str, Any]]:
-        """
-        Calculates hybrid cosine similarity and keyword relevance between query and stored document chunk embeddings for the given project.
-        """
-        results = []
-        query_words = set(re.findall(r'\w+', (raw_query or "").lower()))
-        
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            c = conn.cursor()
-            c.execute("""
-                SELECT dc.*, d.filename 
-                FROM document_chunks dc
-                JOIN documents d ON dc.document_id = d.id
-                WHERE dc.project_id = ?
-            """, (project_id,))
-            rows = c.fetchall()
-
-            for row in rows:
-                content_lower = (row["content"] or "").lower()
-                title_lower = (row["section_title"] or "").lower()
-                
-                # 1. Cosine Vector Similarity
-                sim = 0.0
-                emb_str = row["embedding"]
-                if emb_str and query_embedding and any(query_embedding):
-                    emb = json.loads(emb_str)
-                    sim = self._cosine_similarity(query_embedding, emb)
-                
-                # 2. Keyword Overlap Score (0.0 to 1.0)
-                kw_score = 0.0
-                if query_words:
-                    matched_words = sum(1 for w in query_words if w in content_lower or w in title_lower)
-                    kw_score = matched_words / max(len(query_words), 1)
-                
-                # Combined Score
-                combined_score = max(sim, kw_score * 0.85, (sim * 0.7 + kw_score * 0.3))
-                
-                if combined_score >= similarity_threshold or len(rows) <= top_k:
-                    item = dict(row)
-                    item.pop("embedding", None)
-                    item["metadata"] = json.loads(item.get("metadata") or "{}")
-                    item["similarity"] = round(combined_score, 4)
-                    results.append(item)
-
-        results.sort(key=lambda x: x["similarity"], reverse=True)
-        return results[:top_k]
-
-    def _cosine_similarity(self, v1: List[float], v2: List[float]) -> float:
-        if not v1 or not v2 or len(v1) != len(v2):
-            return 0.0
-        dot = sum(a * b for a, b in zip(v1, v2))
-        norm_a = math.sqrt(sum(a * a for a in v1))
-        norm_b = math.sqrt(sum(b * b for b in v2))
-        if norm_a == 0.0 or norm_b == 0.0:
-            return 0.0
-        return dot / (norm_a * norm_b)
-
     # =========================================================================
     # EVALUATIONS
     # =========================================================================
@@ -489,12 +733,13 @@ class SupabaseService:
         e_id = eval_data.get("id") or str(uuid.uuid4())
         now = datetime.now(timezone.utc).isoformat()
         
-        strengths = json.dumps(eval_data.get("strengths", []))
-        weaknesses = json.dumps(eval_data.get("weaknesses", []))
-        risks = json.dumps(eval_data.get("risks", []))
-        improvements = json.dumps(eval_data.get("improvements", []))
-        judge_feedback = json.dumps(eval_data.get("judge_feedback", {}))
+        strengths = eval_data.get("strengths", [])
+        weaknesses = eval_data.get("weaknesses", [])
+        risks = eval_data.get("risks", [])
+        improvements = eval_data.get("improvements", [])
+        judge_feedback = eval_data.get("judge_feedback", {})
 
+        # 1. Save to SQLite
         with sqlite3.connect(self.db_path) as conn:
             c = conn.cursor()
             c.execute("""
@@ -539,14 +784,13 @@ class SupabaseService:
                 eval_data.get("rag_quality_score", 0),
                 eval_data.get("feasibility_score", 0),
                 eval_data.get("summary", ""),
-                strengths,
-                weaknesses,
-                risks,
-                improvements,
-                judge_feedback,
+                json.dumps(strengths),
+                json.dumps(weaknesses),
+                json.dumps(risks),
+                json.dumps(improvements),
+                json.dumps(judge_feedback),
                 now
             ))
-            # Also update overall_score & status on project
             c.execute("""
                 UPDATE projects 
                 SET overall_score = ?, status = 'evaluated', updated_at = ? 
@@ -554,9 +798,53 @@ class SupabaseService:
             """, (eval_data.get("overall_score", 0), now, eval_data.get("project_id")))
             conn.commit()
 
+        # 2. Persist to Supabase Cloud
+        if self.client:
+            try:
+                clean_uid = self._clean_user_id(eval_data.get("user_id"))
+                self.client.table("evaluations").upsert({
+                    "id": e_id,
+                    "project_id": eval_data.get("project_id"),
+                    "user_id": clean_uid,
+                    "overall_score": float(eval_data.get("overall_score", 0)),
+                    "status_label": eval_data.get("status_label", "Evaluated"),
+                    "problem_score": float(eval_data.get("problem_score", 0)),
+                    "innovation_score": float(eval_data.get("innovation_score", 0)),
+                    "technical_score": float(eval_data.get("technical_score", 0)),
+                    "user_value_score": float(eval_data.get("user_value_score", 0)),
+                    "requirements_score": float(eval_data.get("requirements_score", 0)),
+                    "scalability_score": float(eval_data.get("scalability_score", 0)),
+                    "security_score": float(eval_data.get("security_score", 0)),
+                    "rag_quality_score": float(eval_data.get("rag_quality_score", 0)),
+                    "feasibility_score": float(eval_data.get("feasibility_score", 0)),
+                    "summary": eval_data.get("summary", ""),
+                    "strengths": strengths if isinstance(strengths, list) else json.loads(strengths),
+                    "weaknesses": weaknesses if isinstance(weaknesses, list) else json.loads(weaknesses),
+                    "risks": risks if isinstance(risks, list) else json.loads(risks),
+                    "improvements": improvements if isinstance(improvements, list) else json.loads(improvements),
+                    "judge_feedback": judge_feedback if isinstance(judge_feedback, dict) else json.loads(judge_feedback)
+                }).execute()
+
+                # Update project score in Supabase
+                self.client.table("projects").update({
+                    "overall_score": float(eval_data.get("overall_score", 0)),
+                    "status": "evaluated",
+                    "updated_at": now
+                }).eq("id", eval_data.get("project_id")).execute()
+            except Exception as e:
+                print(f"[SupabaseService] Cloud save_evaluation error: {e}")
+
         return self.get_evaluation(e_id) or {}
 
     def get_evaluation(self, eval_id: str) -> Optional[Dict[str, Any]]:
+        if self.client:
+            try:
+                res = self.client.table("evaluations").select("*").eq("id", eval_id).execute()
+                if res and res.data and len(res.data) > 0 and isinstance(res.data[0], dict):
+                    return dict(res.data[0])
+            except Exception:
+                pass
+
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             c = conn.cursor()
@@ -573,6 +861,14 @@ class SupabaseService:
             return res
 
     def get_project_evaluations(self, project_id: str) -> List[Dict[str, Any]]:
+        if self.client:
+            try:
+                res = self.client.table("evaluations").select("*").eq("project_id", project_id).order("created_at", desc=True).execute()
+                if res and res.data is not None and len(res.data) > 0:
+                    return [dict(ev) for ev in res.data if isinstance(ev, dict)]
+            except Exception:
+                pass
+
         evals = []
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
@@ -589,9 +885,17 @@ class SupabaseService:
         return evals
 
     # =========================================================================
-    # AI BOARD ITEMS (7 Columns)
+    # AI BOARD ITEMS (7 Columns Kanban)
     # =========================================================================
     def get_board_items(self, project_id: str) -> List[Dict[str, Any]]:
+        if self.client:
+            try:
+                res = self.client.table("ai_board_items").select("*").eq("project_id", project_id).order("position").order("created_at").execute()
+                if res and res.data is not None and len(res.data) > 0:
+                    return [dict(it) for it in res.data if isinstance(it, dict)]
+            except Exception:
+                pass
+
         items = []
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
@@ -607,6 +911,8 @@ class SupabaseService:
     def save_board_item(self, item_data: Dict[str, Any]) -> Dict[str, Any]:
         i_id = item_data.get("id") or str(uuid.uuid4())
         now = datetime.now(timezone.utc).isoformat()
+        
+        # 1. Save to SQLite
         with sqlite3.connect(self.db_path) as conn:
             c = conn.cursor()
             c.execute("""
@@ -638,7 +944,30 @@ class SupabaseService:
                 now
             ))
             conn.commit()
-        
+
+        # 2. Persist to Supabase Cloud
+        if self.client:
+            try:
+                clean_uid = self._clean_user_id(item_data.get("user_id"))
+                self.client.table("ai_board_items").upsert({
+                    "id": i_id,
+                    "project_id": item_data.get("project_id"),
+                    "user_id": clean_uid,
+                    "column_name": item_data.get("column_name", "PROBLEM"),
+                    "title": item_data.get("title", ""),
+                    "description": item_data.get("description", ""),
+                    "priority": item_data.get("priority", "MEDIUM"),
+                    "source_type": item_data.get("source_type", "manual"),
+                    "source_id": item_data.get("source_id", ""),
+                    "completed": bool(item_data.get("completed", False)),
+                    "is_pinned": bool(item_data.get("is_pinned", False)),
+                    "position": int(item_data.get("position", 0)),
+                    "updated_at": now
+                }).execute()
+            except Exception as e:
+                print(f"[SupabaseService] Cloud save_board_item error: {e}")
+
+        # Return item
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             c = conn.cursor()
@@ -653,12 +982,26 @@ class SupabaseService:
             c = conn.cursor()
             c.execute("DELETE FROM ai_board_items WHERE id = ?", (item_id,))
             conn.commit()
+
+        if self.client:
+            try:
+                self.client.table("ai_board_items").delete().eq("id", item_id).execute()
+            except Exception as e:
+                print(f"[SupabaseService] Cloud delete_board_item error: {e}")
         return True
 
     # =========================================================================
     # CHAT SESSIONS & MESSAGES
     # =========================================================================
     def get_chat_sessions(self, project_id: str) -> List[Dict[str, Any]]:
+        if self.client:
+            try:
+                res = self.client.table("chat_sessions").select("*").eq("project_id", project_id).order("updated_at", desc=True).execute()
+                if res and res.data is not None and len(res.data) > 0:
+                    return [dict(cs) for cs in res.data if isinstance(cs, dict)]
+            except Exception:
+                pass
+
         sessions = []
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
@@ -673,6 +1016,8 @@ class SupabaseService:
         now = datetime.now(timezone.utc).isoformat()
         uid = user_id or "demo-user"
         t = title or "New Conversation"
+        
+        # 1. SQLite
         with sqlite3.connect(self.db_path) as conn:
             c = conn.cursor()
             c.execute("""
@@ -680,9 +1025,33 @@ class SupabaseService:
                 VALUES (?, ?, ?, ?, ?, ?)
             """, (s_id, project_id, uid, t, now, now))
             conn.commit()
+
+        # 2. Supabase Cloud
+        if self.client:
+            try:
+                clean_uid = self._clean_user_id(user_id)
+                self.client.table("chat_sessions").insert({
+                    "id": s_id,
+                    "project_id": project_id,
+                    "user_id": clean_uid,
+                    "title": t,
+                    "created_at": now,
+                    "updated_at": now
+                }).execute()
+            except Exception as e:
+                print(f"[SupabaseService] Cloud create_chat_session error: {e}")
+
         return {"id": s_id, "project_id": project_id, "user_id": uid, "title": t, "created_at": now, "updated_at": now}
 
     def get_chat_messages(self, session_id: str) -> List[Dict[str, Any]]:
+        if self.client:
+            try:
+                res = self.client.table("chat_messages").select("*").eq("session_id", session_id).order("created_at", desc=False).execute()
+                if res and res.data is not None and len(res.data) > 0:
+                    return [dict(m) for m in res.data if isinstance(m, dict)]
+            except Exception:
+                pass
+
         messages = []
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
@@ -698,22 +1067,42 @@ class SupabaseService:
         m_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc).isoformat()
         uid = user_id or "demo-user"
-        citations_str = json.dumps(citations or [])
+        citations_list = citations or []
+        
+        # 1. SQLite
         with sqlite3.connect(self.db_path) as conn:
             c = conn.cursor()
             c.execute("""
                 INSERT INTO chat_messages (id, session_id, user_id, role, content, citations, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (m_id, session_id, uid, role, content, citations_str, now))
+            """, (m_id, session_id, uid, role, content, json.dumps(citations_list), now))
             c.execute("UPDATE chat_sessions SET updated_at = ? WHERE id = ?", (now, session_id))
             conn.commit()
+
+        # 2. Supabase Cloud
+        if self.client:
+            try:
+                clean_uid = self._clean_user_id(user_id)
+                self.client.table("chat_messages").insert({
+                    "id": m_id,
+                    "session_id": session_id,
+                    "user_id": clean_uid,
+                    "role": role,
+                    "content": content,
+                    "citations": citations_list,
+                    "created_at": now
+                }).execute()
+                self.client.table("chat_sessions").update({"updated_at": now}).eq("id", session_id).execute()
+            except Exception as e:
+                print(f"[SupabaseService] Cloud save_chat_message error: {e}")
+
         return {
             "id": m_id,
             "session_id": session_id,
             "user_id": uid,
             "role": role,
             "content": content,
-            "citations": citations or [],
+            "citations": citations_list,
             "created_at": now
         }
 

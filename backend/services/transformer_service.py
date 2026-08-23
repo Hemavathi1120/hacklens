@@ -29,7 +29,7 @@ class TransformerService:
     """
 
     DIMENSIONS = 3072
-    GEMINI_MODEL = "text-embedding-004"
+    GEMINI_MODEL = "gemini-embedding-001"
 
     def __init__(self):
         self.api_key = settings.GEMINI_API_KEY

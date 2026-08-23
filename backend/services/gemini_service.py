@@ -559,7 +559,7 @@ Synthesize a deeply informative, developer-ready, structured response answering 
                 if any(k in q_lower for k in ['user', 'who', 'target', 'audience', 'persona']) and any(k in s_lower for k in ['user', 'citizen', 'researcher', 'stakeholder', 'analyst', 'team', 'person']):
                     boost += 3
 
-                score_val = int(overlap * 2 + boost)
+                score_val = overlap * 2 + boost
                 item: Dict[str, Any] = {
                     "sentence": s_clean,
                     "score": score_val,
@@ -569,8 +569,8 @@ Synthesize a deeply informative, developer-ready, structured response answering 
                 }
                 scored_sentences.append(item)
 
-        scored_sentences.sort(key=lambda x: int(x["score"]), reverse=True)
-        top_sentences: List[Dict[str, Any]] = [s for s in scored_sentences if int(s["score"]) > 0][:4]
+        scored_sentences.sort(key=lambda x: x["score"], reverse=True)
+        top_sentences: List[Dict[str, Any]] = [s for s in scored_sentences if s["score"] > 0][:4]
         if not top_sentences and scored_sentences:
             top_sentences = scored_sentences[:3]
 

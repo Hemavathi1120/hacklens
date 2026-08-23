@@ -52,6 +52,7 @@ class SupabaseService:
                     description TEXT,
                     problem_statement TEXT,
                     initial_idea TEXT,
+                    demo_url TEXT,
                     target_users TEXT,
                     technologies TEXT,
                     constraints TEXT,
@@ -61,6 +62,11 @@ class SupabaseService:
                     updated_at TEXT
                 )
             """)
+            # Migration check for demo_url
+            try:
+                c.execute("ALTER TABLE projects ADD COLUMN demo_url TEXT")
+            except Exception:
+                pass
             c.execute("""
                 CREATE TABLE IF NOT EXISTS project_requirements (
                     id TEXT PRIMARY KEY,
@@ -228,13 +234,14 @@ class SupabaseService:
         with sqlite3.connect(self.db_path) as conn:
             c = conn.cursor()
             c.execute("""
-                INSERT INTO projects (id, user_id, name, description, problem_statement, initial_idea, target_users, technologies, constraints, status, overall_score, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO projects (id, user_id, name, description, problem_statement, initial_idea, demo_url, target_users, technologies, constraints, status, overall_score, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     name=excluded.name,
                     description=excluded.description,
                     problem_statement=excluded.problem_statement,
                     initial_idea=excluded.initial_idea,
+                    demo_url=excluded.demo_url,
                     target_users=excluded.target_users,
                     technologies=excluded.technologies,
                     constraints=excluded.constraints,
@@ -248,6 +255,7 @@ class SupabaseService:
                 project_data.get("description", ""),
                 project_data.get("problem_statement", ""),
                 project_data.get("initial_idea", ""),
+                project_data.get("demo_url", ""),
                 target_users,
                 technologies,
                 constraints,
@@ -287,6 +295,7 @@ class SupabaseService:
                     "description": project_data.get("description", ""),
                     "problem_statement": project_data.get("problem_statement", ""),
                     "initial_idea": project_data.get("initial_idea", ""),
+                    "demo_url": project_data.get("demo_url", ""),
                     "target_users": project_data.get("target_users", []),
                     "technologies": project_data.get("technologies", []),
                     "constraints": project_data.get("constraints", []),

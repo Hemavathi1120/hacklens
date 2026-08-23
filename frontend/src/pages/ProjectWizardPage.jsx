@@ -17,7 +17,9 @@ import {
   UploadCloud,
   Wand2,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Globe,
+  ExternalLink
 } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import UploadZone from '../components/UploadZone';
@@ -38,6 +40,7 @@ export default function ProjectWizardPage() {
   const [description, setDescription] = useState('');
   const [problemStatement, setProblemStatement] = useState('');
   const [initialIdea, setInitialIdea] = useState('');
+  const [demoUrl, setDemoUrl] = useState('');
   
   // Document Uploads
   const [uploadedDocs, setUploadedDocs] = useState([]);
@@ -113,6 +116,7 @@ export default function ProjectWizardPage() {
             description: description.trim() || problemStatement.slice(0, 120),
             problem_statement: problemStatement.trim(),
             initial_idea: initialIdea.trim(),
+            demo_url: demoUrl.trim(),
             target_users: targetUsers.filter(u => u.trim()),
             technologies: technologies.filter(t => t.trim()),
             constraints: constraints.filter(c => c.trim()),
@@ -127,6 +131,7 @@ export default function ProjectWizardPage() {
             description: description.trim(),
             problem_statement: problemStatement.trim(),
             initial_idea: initialIdea.trim(),
+            demo_url: demoUrl.trim(),
           });
         }
         setCurrentStep(3); // Go to Step 03: Documents
@@ -300,6 +305,25 @@ export default function ProjectWizardPage() {
                   placeholder="e.g. AI-powered municipal intelligence and legal citation assistant."
                   className="w-full px-4 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-red-500 focus:bg-black"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-zinc-300 mb-1">
+                  Live Deployed Demo URL (Optional)
+                </label>
+                <div className="relative">
+                  <Globe className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                  <input
+                    type="url"
+                    value={demoUrl}
+                    onChange={(e) => setDemoUrl(e.target.value)}
+                    placeholder="https://my-deployed-app.vercel.app or demo prototype link"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-red-500 focus:bg-black"
+                  />
+                </div>
+                <p className="text-[11px] text-zinc-500 mt-1">
+                  Connect your live application demo so AI judges and evaluators can cross-reference the working prototype.
+                </p>
               </div>
 
               <div>
@@ -703,6 +727,24 @@ export default function ProjectWizardPage() {
                 <span className="text-zinc-500 font-semibold uppercase text-[10px] font-mono">Solution Idea</span>
                 <p className="text-zinc-300 leading-relaxed font-normal">{initialIdea}</p>
               </div>
+
+              {demoUrl && (
+                <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800 flex items-center justify-between gap-3">
+                  <div>
+                    <span className="text-zinc-500 font-semibold uppercase text-[10px] font-mono">Live Deployed Demo</span>
+                    <p className="text-red-400 font-bold text-xs truncate">{demoUrl}</p>
+                  </div>
+                  <a
+                    href={demoUrl.startsWith('http') ? demoUrl : `https://${demoUrl}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700/80 text-red-300 text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs flex-shrink-0"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Test App</span>
+                  </a>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800 space-y-1">

@@ -16,7 +16,6 @@ import ChatbotPage from './pages/ChatbotPage';
 import EvaluationPage from './pages/EvaluationPage';
 import AIBoardPage from './pages/AIBoardPage';
 import SuggestionsPage from './pages/SuggestionsPage';
-import RagQualityDashboardPage from './pages/RagQualityDashboardPage';
 import ProfilePage from './pages/ProfilePage';
 
 // Protected Route Wrapper
@@ -91,7 +90,6 @@ export default function App() {
             <Route path="evaluation" element={<EvaluationPage />} />
             <Route path="board" element={<AIBoardPage />} />
             <Route path="suggestions" element={<SuggestionsPage />} />
-            <Route path="rag-dashboard" element={<RagQualityDashboardPage />} />
           </Route>
 
           <Route

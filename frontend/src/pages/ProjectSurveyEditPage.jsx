@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { Compass, Save, Plus, Trash2, Check, Sparkles, Loader2, Wand2, CheckCircle2 } from 'lucide-react';
+import { Compass, Save, Plus, Trash2, Check, Sparkles, Loader2, Wand2, CheckCircle2, Globe, ExternalLink } from 'lucide-react';
 import AiHelperModal from '../components/AiHelperModal';
 import { api } from '../lib/api';
 
@@ -11,6 +11,7 @@ export default function ProjectSurveyEditPage() {
   const [description, setDescription] = useState(project.description || '');
   const [problemStatement, setProblemStatement] = useState(project.problem_statement || '');
   const [initialIdea, setInitialIdea] = useState(project.initial_idea || '');
+  const [demoUrl, setDemoUrl] = useState(project.demo_url || '');
   
   const [targetUsers, setTargetUsers] = useState(project.target_users?.length ? project.target_users : ['']);
   const [technologies, setTechnologies] = useState(project.technologies?.length ? project.technologies : ['']);
@@ -74,6 +75,7 @@ export default function ProjectSurveyEditPage() {
         description,
         problem_statement: problemStatement,
         initial_idea: initialIdea,
+        demo_url: demoUrl.trim(),
         target_users: targetUsers.filter(u => u.trim()),
         technologies: technologies.filter(t => t.trim()),
         constraints: constraints.filter(c => c.trim()),
@@ -99,7 +101,7 @@ export default function ProjectSurveyEditPage() {
             Project Definition & Survey Context
           </h3>
           <p className="text-xs text-zinc-400 mt-1 font-normal">
-            Update problem statement, solution idea, target stakeholders, and constraints.
+            Update problem statement, solution idea, live deployed demo URL, target stakeholders, and constraints.
           </p>
         </div>
 
@@ -144,6 +146,36 @@ export default function ProjectSurveyEditPage() {
             onChange={(e) => setName(e.target.value)}
             className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white focus:outline-none focus:border-red-500 focus:bg-black"
           />
+        </div>
+
+        {/* Live Deployed Demo URL */}
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-xs font-semibold text-zinc-300">Live Deployed Application URL</label>
+            {demoUrl && (
+              <a
+                href={demoUrl.startsWith('http') ? demoUrl : `https://${demoUrl}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-red-400 hover:text-red-300 font-semibold flex items-center gap-1"
+              >
+                <ExternalLink className="w-3 h-3" /> Test App Live
+              </a>
+            )}
+          </div>
+          <div className="relative">
+            <Globe className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+            <input
+              type="url"
+              value={demoUrl}
+              onChange={(e) => setDemoUrl(e.target.value)}
+              placeholder="https://my-app.vercel.app or deployed prototype URL"
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white focus:outline-none focus:border-red-500 focus:bg-black"
+            />
+          </div>
+          <p className="text-[11px] text-zinc-500 mt-1 font-normal">
+            Used during 12-dimensional judging and RAG queries to evaluate the live working prototype.
+          </p>
         </div>
 
         {/* Problem Statement */}

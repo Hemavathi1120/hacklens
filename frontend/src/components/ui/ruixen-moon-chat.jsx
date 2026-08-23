@@ -23,7 +23,8 @@ import {
   RotateCw,
   ExternalLink,
   ChevronRight,
-  Zap
+  Zap,
+  Globe
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -33,21 +34,32 @@ export default function RuixenMoonChat({
   projectName = "",
   domain = "",
   score = null,
+  demoUrl = "",
   messages = [],
   onSendMessage,
   isLoading = false,
   onAttachFile,
-  suggestedActions = [
+  suggestedActions = null,
+  className = ""
+}) {
+  const defaultActions = [
+    ...(demoUrl ? [
+      { 
+        label: "Evaluate Live Demo App", 
+        prompt: `Evaluate the live demo application deployed at ${demoUrl}. Analyze its features, user interface, speed, and whether it fulfills the declared problem statement and requirements.`, 
+        icon: ExternalLink 
+      },
+    ] : []),
     { label: "Explain Requirements", prompt: "Explain the mandatory requirements of this project and show supporting sources.", icon: FileText },
-    { label: "Evaluate My Project", prompt: "Evaluate my project against the hackathon criteria and highlight key strengths.", icon: Award },
+    { label: "Evaluate My Project", prompt: `Evaluate my project against the hackathon criteria and highlight key strengths${demoUrl ? ` including the live app at ${demoUrl}` : ''}.`, icon: Award },
     { label: "Find Missing Requirements", prompt: "Identify any missing requirements or gaps in my project documentation.", icon: AlertCircle },
     { label: "Analyze Judging Criteria", prompt: "Analyze how judges will evaluate this submission and key scoring metrics.", icon: BarChart3 },
     { label: "Suggest Improvements", prompt: "What are the most impactful technical and UX improvements for this project?", icon: Lightbulb },
     { label: "Find Weak Evidence", prompt: "Which claims lack sufficient evidence or citations in the uploaded documentation?", icon: Search },
     { label: "Check Project Relevance", prompt: "How effectively does this project solve the declared problem statement?", icon: Target },
-  ],
-  className = ""
-}) {
+  ];
+
+  const actions = suggestedActions || defaultActions;
   const [inputValue, setInputValue] = useState('');
   const textareaRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -258,17 +270,33 @@ export default function RuixenMoonChat({
           </div>
         </div>
 
-        {/* Project Context Chip */}
-        {projectName && (
-          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-300 font-semibold shadow-2xs flex-shrink-0">
-            <span className="truncate max-w-[120px] font-bold text-red-400">{projectName}</span>
-            {score !== null && score !== undefined && score > 0 && (
-              <span className="px-1.5 py-0.2 rounded bg-red-950 text-red-400 border border-red-500/30 font-mono text-[10px] font-bold">
-                {Math.round(score)}/100
-              </span>
-            )}
-          </div>
-        )}
+        {/* Project Context & Live Demo Chips */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {demoUrl && (
+            <a
+              href={demoUrl.startsWith('http') ? demoUrl : `https://${demoUrl}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700/80 hover:border-red-500/40 text-red-300 text-xs font-bold transition-all shadow-2xs"
+              title="Open Deployed Demo Application"
+            >
+              <Globe className="w-3.5 h-3.5 text-red-400" />
+              <span className="truncate max-w-[150px]">Live Demo</span>
+              <ExternalLink className="w-3 h-3 text-zinc-400" />
+            </a>
+          )}
+
+          {projectName && (
+            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-300 font-semibold shadow-2xs">
+              <span className="truncate max-w-[120px] font-bold text-red-400">{projectName}</span>
+              {score !== null && score !== undefined && score > 0 && (
+                <span className="px-1.5 py-0.2 rounded bg-red-950 text-red-400 border border-red-500/30 font-mono text-[10px] font-bold">
+                  {Math.round(score)}/100
+                </span>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Suggested Quick Action Chips Toolbar */}
@@ -276,7 +304,7 @@ export default function RuixenMoonChat({
         <span className="text-[10px] uppercase font-bold text-zinc-500 font-mono whitespace-nowrap flex items-center gap-1">
           <Zap className="w-3 h-3 text-red-400" /> Prompts:
         </span>
-        {suggestedActions.slice(0, 5).map((action, idx) => (
+        {actions.slice(0, 6).map((action, idx) => (
           <button
             key={idx}
             onClick={() => onSendMessage(action.prompt)}

@@ -16,7 +16,9 @@ import {
   Paperclip, 
   ShieldCheck, 
   Search, 
-  BookOpen 
+  BookOpen,
+  Globe,
+  ExternalLink
 } from 'lucide-react';
 import RuixenMoonChat from '../components/ui/ruixen-moon-chat';
 import { useAuth } from '../contexts/AuthContext';
@@ -219,6 +221,27 @@ export default function ChatbotPage() {
             </span>
           </div>
 
+          {/* Live Deployed Demo App Card */}
+          {project.demo_url && (
+            <div className="rounded-2xl bg-zinc-950/80 border border-zinc-800 p-2.5 space-y-1.5 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-red-400 font-mono flex items-center gap-1.5">
+                  <Globe className="w-3.5 h-3.5 text-red-400" />
+                  Live App
+                </span>
+                <a
+                  href={project.demo_url.startsWith('http') ? project.demo_url : `https://${project.demo_url}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[10px] text-red-300 hover:text-white flex items-center gap-1 font-bold bg-zinc-900 px-2 py-0.5 rounded-md border border-zinc-700/60 transition-colors"
+                >
+                  <ExternalLink className="w-2.5 h-2.5" /> Launch
+                </a>
+              </div>
+              <p className="text-[11px] text-zinc-400 font-mono truncate">{project.demo_url}</p>
+            </div>
+          )}
+
           {/* Problem Statement Accordion */}
           <div className="rounded-2xl bg-zinc-950/80 border border-zinc-800 overflow-hidden shadow-2xs">
             <button
@@ -296,6 +319,7 @@ export default function ChatbotPage() {
           projectName={project.name}
           domain={project.domain}
           score={project.overall_score}
+          demoUrl={project.demo_url}
           messages={messages}
           onSendMessage={handleSend}
           isLoading={sending}

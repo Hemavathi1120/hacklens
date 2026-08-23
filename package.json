@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node start.js",
     "dev": "node start.js",
-    "build": "cd frontend && npm run build"
+    "build": "cd frontend && npm install && npm run build"
   },
   "keywords": [
     "ai",

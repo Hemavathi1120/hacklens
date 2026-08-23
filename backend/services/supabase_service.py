@@ -19,8 +19,14 @@ class SupabaseService:
         self.storage_bucket = settings.STORAGE_BUCKET
         
         # Local SQLite database path for guaranteed data persistence & instant speed
-        self.db_path = Path(__file__).resolve().parent.parent / "data" / "projectlens.db"
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        if os.environ.get("VERCEL"):
+            self.db_path = Path("/tmp") / "projectlens.db"
+        else:
+            self.db_path = Path(__file__).resolve().parent.parent / "data" / "projectlens.db"
+            try:
+                self.db_path.parent.mkdir(parents=True, exist_ok=True)
+            except Exception:
+                self.db_path = Path("/tmp") / "projectlens.db"
         
         # Init SQLite tables
         self._init_sqlite()

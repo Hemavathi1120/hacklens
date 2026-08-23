@@ -7,3 +7,7 @@ search-path = [
     "C:/Users/saidh/AppData/Local/Programs/Python/Python312/Lib/site-packages",
     "C:/Users/saidh/AppData/Roaming/Python/Python312/site-packages"
 ]
+
+[tool.vercel]
+entrypoint = "backend.main:app"
+

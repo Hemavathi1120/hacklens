@@ -25,6 +25,8 @@ app = FastAPI(
     title="ProjectLens AI API",
     description="Backend API for AI Project Evaluation and RAG Assistant",
     version="1.0.0",
+    docs_url="/api/docs",
+    openapi_url="/api/openapi.json",
     lifespan=lifespan
 )
 
@@ -47,12 +49,13 @@ app.include_router(rag_metrics.router)
 
 
 @app.get("/")
+@app.get("/api")
 def root():
     return {
         "app": "ProjectLens AI",
         "version": "1.0.0",
         "status": "online",
-        "docs_url": "/docs"
+        "docs_url": "/api/docs"
     }
 
 @app.get("/api/health")

@@ -12,9 +12,7 @@ import {
   CheckCircle2, 
   Compass,
   Zap,
-  TrendingUp,
-  Globe,
-  ExternalLink
+  TrendingUp
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -110,20 +108,6 @@ export default function CardFanCarousel({ projects = [], className = '' }) {
                   <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-zinc-800 text-zinc-300 border border-zinc-700">
                     {status}
                   </span>
-                  {project.demo_url && (
-                    <a
-                      href={project.demo_url.startsWith('http') ? project.demo_url : `https://${project.demo_url}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-zinc-900 hover:bg-zinc-800 text-red-300 border border-zinc-700/80 flex items-center gap-1 transition-colors z-20"
-                      title="Open Deployed Live Demo"
-                    >
-                      <Globe className="w-2.5 h-2.5 text-red-400" />
-                      <span>Live</span>
-                      <ExternalLink className="w-2 h-2" />
-                    </a>
-                  )}
                 </div>
 
                 {/* Score Chip with Red Gradient */}

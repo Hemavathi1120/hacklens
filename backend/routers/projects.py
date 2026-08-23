@@ -14,7 +14,6 @@ class ProjectCreateRequest(BaseModel):
     description: Optional[str] = ""
     problem_statement: Optional[str] = ""
     initial_idea: Optional[str] = ""
-    demo_url: Optional[str] = ""
     target_users: Optional[List[str]] = []
     technologies: Optional[List[str]] = []
     constraints: Optional[List[str]] = []
@@ -26,7 +25,6 @@ class ProjectUpdateRequest(BaseModel):
     description: Optional[str] = None
     problem_statement: Optional[str] = None
     initial_idea: Optional[str] = None
-    demo_url: Optional[str] = None
     target_users: Optional[List[str]] = None
     technologies: Optional[List[str]] = None
     constraints: Optional[List[str]] = None
@@ -144,7 +142,6 @@ def seed_demo_project():
         "description": "Government Policy Intelligence & Public Service RAG Assistant",
         "problem_statement": "Government regulations, civic welfare schemes, and public compliance policies are dispersed across thousands of disconnected PDF manuals and municipal portals, making it exceedingly difficult for citizens and small businesses to find accurate, current, and actionable guidance.",
         "initial_idea": "An enterprise-grade, evidence-grounded RAG intelligence assistant that indexes verified civic documentation, synthesizes plain-language answers, cites exact statutory sections and pages, and flags outdated policy circulars.",
-        "demo_url": "https://civiclens-ai-demo.vercel.app",
         "target_users": ["Citizens navigating public benefits", "Small business owners seeking compliance", "Municipal caseworkers & legal aids"],
         "technologies": ["React.js", "Python FastAPI", "Google Gemini 3.6", "Supabase pgvector", "Tailwind CSS"],
         "constraints": ["Zero hallucination tolerance on legal statutes", "Sub-2s response latency", "Strict data privacy under GDPR/CCPA"],

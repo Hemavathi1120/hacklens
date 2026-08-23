@@ -20,9 +20,7 @@ import {
   CreditCard,
   CheckCircle2,
   Compass,
-  X,
-  Globe,
-  ExternalLink
+  X
 } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import ScoreRing from '../components/ScoreRing';
@@ -407,27 +405,13 @@ export default function ProjectsListPage() {
                         <span className="font-black font-display text-red-400">{score > 0 ? `${Math.round(score)}/100` : 'Draft'}</span>
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        {project.demo_url && (
-                          <a
-                            href={project.demo_url.startsWith('http') ? project.demo_url : `https://${project.demo_url}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-1.5 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 text-red-300 text-xs font-bold flex items-center gap-1 transition-all border border-zinc-700/50 shadow-2xs"
-                            title="Open Live Deployed Application"
-                          >
-                            <Globe className="w-3.5 h-3.5 text-red-400" />
-                          </a>
-                        )}
-
-                        <Link
-                          to={`/projects/${project.id}/evaluation`}
-                          className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-red-600 hover:text-white text-zinc-200 text-xs font-bold flex items-center gap-1 transition-all shadow-xs border border-zinc-700/60"
-                        >
-                          <span>Inspect</span>
-                          <ArrowUpRight className="w-3.5 h-3.5" />
-                        </Link>
-                      </div>
+                      <Link
+                        to={`/projects/${project.id}/evaluation`}
+                        className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-red-600 hover:text-white text-zinc-200 text-xs font-bold flex items-center gap-1 transition-all shadow-xs border border-zinc-700/60"
+                      >
+                        <span>Inspect</span>
+                        <ArrowUpRight className="w-3.5 h-3.5" />
+                      </Link>
                     </div>
                   </div>
                 );

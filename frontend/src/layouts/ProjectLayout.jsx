@@ -11,8 +11,7 @@ import {
   ArrowLeft, 
   RotateCw, 
   Sparkles,
-  ChevronRight,
-  ExternalLink
+  ChevronRight
 } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import ScoreRing from '../components/ScoreRing';
@@ -135,20 +134,7 @@ export default function ProjectLayout() {
           </div>
 
           {/* Quick Stats & Actions */}
-          <div className="flex items-center gap-3">
-            {project.demo_url && (
-              <a
-                href={project.demo_url.startsWith('http') ? project.demo_url : `https://${project.demo_url}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700/80 hover:border-red-500/40 text-red-300 hover:text-red-200 text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs"
-                title="Launch Live Deployed Application"
-              >
-                <ExternalLink className="w-3.5 h-3.5 text-red-400" />
-                <span>Live Demo</span>
-              </a>
-            )}
-
+          <div className="flex items-center gap-4">
             <div className="flex items-center gap-3 px-3.5 py-1.5 rounded-2xl bg-zinc-900/90 border border-zinc-800 shadow-xs">
               <div className="text-right">
                 <div className="text-xs font-bold text-zinc-300">

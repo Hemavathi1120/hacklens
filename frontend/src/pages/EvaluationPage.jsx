@@ -20,9 +20,7 @@ import {
   BarChart3,
   Filter,
   CheckCircle,
-  Flame,
-  Globe,
-  ExternalLink
+  Flame
 } from 'lucide-react';
 import ScoreRing from '../components/ScoreRing';
 import EvaluationCategoryCard from '../components/EvaluationCategoryCard';
@@ -197,21 +195,6 @@ export default function EvaluationPage() {
             <p className="text-xs text-zinc-400 max-w-md leading-relaxed line-clamp-2 font-normal">
               {latestEval.summary || 'Project displays strong technical and problem-solution alignment with grounded citations.'}
             </p>
-
-            {project.demo_url && (
-              <div className="pt-1 flex items-center gap-2">
-                <a
-                  href={project.demo_url.startsWith('http') ? project.demo_url : `https://${project.demo_url}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-950 border border-zinc-800 hover:border-red-500/40 text-red-300 hover:text-white text-[11px] font-bold shadow-2xs transition-all"
-                >
-                  <Globe className="w-3 h-3 text-red-400" />
-                  <span className="truncate max-w-[200px]">Live Demo: {project.demo_url}</span>
-                  <ExternalLink className="w-2.5 h-2.5 text-zinc-500" />
-                </a>
-              </div>
-            )}
           </div>
         </div>
 
@@ -563,7 +546,6 @@ export default function EvaluationPage() {
         onClose={() => setJudgeModalOpen(false)}
         judgeData={latestEval.judge_feedback}
         projectName={project.name}
-        demoUrl={project.demo_url}
       />
 
       <ComparisonModal

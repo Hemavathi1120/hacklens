@@ -1,7 +1,7 @@
 import React from 'react';
-import { Award, X, HelpCircle, AlertTriangle, Lightbulb, Sparkles, CheckCircle2, Globe, ExternalLink } from 'lucide-react';
+import { Award, X, HelpCircle, AlertTriangle, Lightbulb, Sparkles, CheckCircle2 } from 'lucide-react';
 
-export default function JudgeModeModal({ isOpen, onClose, judgeData, projectName, demoUrl }) {
+export default function JudgeModeModal({ isOpen, onClose, judgeData, projectName }) {
   if (!isOpen || !judgeData) return null;
 
   const judgeScore = judgeData.judge_score || 85;
@@ -24,18 +24,6 @@ export default function JudgeModeModal({ isOpen, onClose, judgeData, projectName
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-red-950/40 text-red-400 border border-red-500/30">
                   Hackathon / Venture Judge Mode
                 </span>
-                {demoUrl && (
-                  <a
-                    href={demoUrl.startsWith('http') ? demoUrl : `https://${demoUrl}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-zinc-800 hover:bg-zinc-700 text-red-300 border border-zinc-700 flex items-center gap-1 transition-colors"
-                  >
-                    <Globe className="w-2.5 h-2.5 text-red-400" />
-                    <span>Live App</span>
-                    <ExternalLink className="w-2 h-2" />
-                  </a>
-                )}
               </div>
               <h3 className="text-xl font-bold font-display text-zinc-100 mt-1">
                 AI Judge Critique: <span className="text-red-400">{projectName}</span>

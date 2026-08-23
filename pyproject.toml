@@ -1,3 +1,29 @@
+[project]
+name = "hacklens-backend"
+version = "1.0.0"
+description = "HackLens AI - Hackathon Evaluation & Grounded RAG Assistant"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.0",
+    "supabase>=2.10.0",
+    "google-genai>=2.10.0",
+    "python-multipart>=0.0.18",
+    "pypdf>=5.0.0",
+    "python-docx>=1.1.0",
+    "python-pptx>=1.0.0",
+    "tiktoken>=0.8.0",
+    "pydantic-settings>=2.6.0",
+    "python-dotenv>=1.0.0",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.vercel]
+entrypoint = "backend.main:app"
+
 [tool.pyrefly]
 python-interpreter-path = "C:/Users/saidh/AppData/Local/Programs/Python/Python312/python.exe"
 search-path = [
@@ -7,7 +33,3 @@ search-path = [
     "C:/Users/saidh/AppData/Local/Programs/Python/Python312/Lib/site-packages",
     "C:/Users/saidh/AppData/Roaming/Python/Python312/site-packages"
 ]
-
-[tool.vercel]
-entrypoint = "backend.main:app"
-
